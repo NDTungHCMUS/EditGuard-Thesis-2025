@@ -136,9 +136,9 @@ def main():
                 'LQ': val_data['LQ'][i].unsqueeze(0),
                 'GT': val_data['GT'][i].unsqueeze(0)
             }
-            print("Child Data of parent: {parent_image_id}, child: {i} is:", child_data)
-            print("Shape LQ of Child Data:", child_data['LQ'].shape)
-            print("Shape GT of Child Data:", child_data['GT'].shape)
+            # print("Child Data of parent: {parent_image_id}, child: {i} is:", child_data)
+            # print("Shape LQ of Child Data:", child_data['LQ'].shape)
+            # print("Shape GT of Child Data:", child_data['GT'].shape)
             model.feed_data(child_data)
             list_ref_L.append(model.ref_L)
             list_real_H.append(model.real_H)
@@ -148,13 +148,20 @@ def main():
         # Step 1.1: Save 36 images to folder
         save_tensor_images(list_container, parent_image_id, opt['datasets']['TD']['split_path_con'])
 
-    #     # Step 2: Combine 36 images into one (4 dimensions)
-    #     parent_container = combine_torch_tensors_4d(list_container)
+        # Step 2: Combine 36 images into one (4 dimensions)
+        parent_container = combine_torch_tensors_4d(list_container)
+        parent_container = torch.nn.functional.interpolate(parent_container, size=(512, 512), mode='nearest', align_corners=None)
+        print("Shape của parent container: ", parent_container.shape)
+        print("Giá trị của Parent container: ", parent_container)
 
-    #     # Step 2.1: Save parent_container to folder
-    #     parent_container_img = util.tensor2img(parent_container)
-    #     save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id).zfill(4)}.png')
-    #     util.save_img(parent_container_img, save_img_path)
+        # Step 2.1: Save parent_container to folder
+        parent_container = parent_container.detach()[0].float().cpu()
+        print("Shape của parent container sau khi xử lí: ", parent_container.shape)
+        parent_container_img = util.tensor2img(parent_container)
+        save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id).zfill(4)}.png')
+        print("Save img path: ", save_img_path)
+        print("Ảnh parent cần lưu: ", parent_container_img)
+        util.save_img(parent_container_img, save_img_path)
 
     #     # Step 3: Diffusion on parent_container
     #     parent_y_forw, parent_y = model.diffusion(image_id = parent_image_id, y_forw = parent_container)
