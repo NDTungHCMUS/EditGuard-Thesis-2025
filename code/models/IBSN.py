@@ -352,7 +352,12 @@ class Model_VSN(BaseModel):
             self.host = self.real_H[:, center - intval+id:center + intval + 1+id]
             self.secret = self.ref_L[:, :, center - intval+id:center + intval + 1+id]
             self.secret = [dwt(self.secret[:,i].reshape(b, -1, h, w)) for i in range(n)]
-
+            print("Len của self.host: ", len(self.host))
+            print("Len của self.secret: ", len(self.secret))
+            print("Shape của Self.host: ", self.host[0].shape)
+            print("Shape của Self.secret: ", self.secret[0].shape)
+            print("Self.host: ", self.host)
+            print("Self.secret: ", self.secret)
             messagenp = np.random.choice([-0.5, 0.5], (self.ref_L.shape[0], self.opt['message_length']))
 
             message = torch.Tensor(messagenp).to(self.device)
@@ -753,16 +758,22 @@ class Model_VSN(BaseModel):
             self.secret = self.ref_L[:, :, center - intval+id:center + intval + 1+id]
             self.secret = [dwt(self.secret[:,i].reshape(b, -1, h, w)) for i in range(n)]
 
+            # print("Len của self.host: ", len(self.host))
+            # print("Len của self.secret: ", len(self.secret))
+            # print("Shape của Self.host: ", self.host[0].shape)
+            # print("Shape của Self.secret: ", self.secret[0].shape)
+            # print("Self.host: ", self.host)
+            # print("Self.secret: ", self.secret)
             messagenp = bit_string_to_messagenp(message, batch_size=1)
 
             message = torch.Tensor(messagenp).to(self.device)
+
+            # print("Message [-0.5, 0.5]: ", message)
 
             if self.opt['hide']:
                 self.output, container = self.netG(x=dwt(self.host.reshape(b, -1, h, w)), x_h=self.secret, message=message)
                 y_forw = container
                 self.container = container.clone()
-            print("Shape của self.host: ", self.host.shape)
-            print("Shape của self.secret: ", self.secret.shape)
             print("Shape của self.container: ", self.container.shape)
         return self.container
 
@@ -787,7 +798,7 @@ class Model_VSN(BaseModel):
                     i = image_id + 1
                     masksrc = "../dataset/valAGE-Set-Mask-5-eles/"
                     mask_image = Image.open(masksrc + str(i).zfill(4) + ".png").convert("L")
-                    # mask_image = mask_image.resize((512, 512))
+                    mask_image = mask_image.resize((512, 512))
                     h, w = mask_image.size
                     
                     image = image_batch[j, :, :, :]
@@ -861,6 +872,9 @@ class Model_VSN(BaseModel):
         return y_forw, y
             
     def extract(self, message, y_forw, y):    
+        messagenp = bit_string_to_messagenp(message, batch_size=1)
+
+        message = torch.Tensor(messagenp).to(self.device)
         with torch.no_grad():
             forw_L = []
             forw_L_h = []

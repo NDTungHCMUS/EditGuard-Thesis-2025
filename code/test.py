@@ -155,21 +155,19 @@ def main():
         # print("Giá trị của Parent container: ", parent_container)
 
         # Step 2.1: Save parent_container to folder
-        parent_container = parent_container.detach()[0].float().cpu()
-        print("Shape của parent container sau khi xử lí: ", parent_container.shape)
-        parent_container_img = util.tensor2img(parent_container)
+        parent_container_img = util.tensor2img(parent_container.detach()[0].float().cpu())
         save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id).zfill(4)}.png')
-        print("Save img path: ", save_img_path)
-        print("Ảnh parent cần lưu: ", parent_container_img)
+        # print("Save img path: ", save_img_path)
+        # print("Ảnh parent cần lưu: ", parent_container_img)
         util.save_img(parent_container_img, save_img_path)
 
-    #     # Step 3: Diffusion on parent_container
-    #     parent_y_forw, parent_y = model.diffusion(image_id = parent_image_id, y_forw = parent_container)
+        # Step 3: Diffusion on parent_container
+        parent_y_forw, parent_y = model.diffusion(image_id = parent_image_id, y_forw = parent_container)
 
-    #     # Step 3.1: Save parent_y_forw to folder
-    #     parent_rec_img = util.tensor2img(parent_y_forw)
-    #     save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id).zfill(4)}_diffusion.png')
-    #     util.save_img(parent_rec_img, save_img_path)
+        # Step 3.1: Save parent_y_forw to folder
+        parent_rec_img = util.tensor2img(parent_y_forw)
+        save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id).zfill(4)}_diffusion.png')
+        util.save_img(parent_rec_img, save_img_path)
 
     #     # Step 4: Split parent_rec into 36 images
     #     list_container_rec = split_torch_tensors_4d(parent_y_forw)
