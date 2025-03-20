@@ -14,7 +14,10 @@ from .modules.common import DWT,IWT
 from utils.jpegtest import JpegTest
 from utils.JPEG import DiffJPEG
 import utils.util as util
-
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from utils.preprocess import bit_string_to_messagenp
 
 import numpy as np
 import random
@@ -736,3 +739,197 @@ class Model_VSN(BaseModel):
 
     def save(self, iter_label):
         self.save_network(self.netG, 'G', iter_label)
+
+    def embed(self, message = "0"*64):
+        self.netG.eval()
+        with torch.no_grad():
+            b, t, c, h, w = self.real_H.shape
+            center = t // 2
+            intval = self.gop // 2
+            b, n, t, c, h, w = self.ref_L.shape
+            id=0
+            # forward downscaling
+            self.host = self.real_H[:, center - intval+id:center + intval + 1+id]
+            self.secret = self.ref_L[:, :, center - intval+id:center + intval + 1+id]
+            self.secret = [dwt(self.secret[:,i].reshape(b, -1, h, w)) for i in range(n)]
+
+            messagenp = bit_string_to_messagenp(message, batch_size=1)
+
+            message = torch.Tensor(messagenp).to(self.device)
+
+            if self.opt['hide']:
+                self.output, container = self.netG(x=dwt(self.host.reshape(b, -1, h, w)), x_h=self.secret, message=message)
+                y_forw = container
+                self.container = container.clone()
+        return self.container
+
+    def diffusion(self, image_id, y_forw):
+        add_noise = self.opt['addnoise']
+        add_jpeg = self.opt['addjpeg']
+        add_possion = self.opt['addpossion']
+        add_sdinpaint = self.opt['sdinpaint']
+        degrade_shuffle = self.opt['degrade_shuffle']
+        with torch.no_grad():
+            if add_sdinpaint:
+                import random
+                from PIL import Image
+                prompt = ""
+
+                b, _, _, _ = y_forw.shape
+                
+                image_batch = y_forw.permute(0, 2, 3, 1).detach().cpu().numpy()
+                forw_list = []
+
+                for j in range(b):
+                    i = image_id + 1
+                    masksrc = "../dataset/valAGE-Set-Mask-5-eles/"
+                    mask_image = Image.open(masksrc + str(i).zfill(4) + ".png").convert("L")
+                    # mask_image = mask_image.resize((512, 512))
+                    h, w = mask_image.size
+                    
+                    image = image_batch[j, :, :, :]
+                    image_init = Image.fromarray((image * 255).astype(np.uint8), mode = "RGB")
+                    image_inpaint = self.pipe(prompt=prompt, image=image_init, mask_image=mask_image, height=w, width=h).images[0]
+                    image_inpaint = np.array(image_inpaint) / 255.
+                    mask_image = np.array(mask_image)
+                    mask_image = np.stack([mask_image] * 3, axis=-1) / 255.
+                    mask_image = mask_image.astype(np.uint8)
+                    image_fuse = image * (1 - mask_image) + image_inpaint * mask_image
+                    forw_list.append(torch.from_numpy(image_fuse).permute(2, 0, 1))
+                
+                y_forw = torch.stack(forw_list, dim=0).float().cuda()
+
+            if degrade_shuffle:
+                import random
+                choice = random.randint(0, 2)
+                
+                if choice == 0:
+                    NL = float((np.random.randint(1,5))/255)
+                    noise = np.random.normal(0, NL, y_forw.shape)
+                    torchnoise = torch.from_numpy(noise).cuda().float()
+                    y_forw = y_forw + torchnoise
+
+                elif choice == 1:
+                    NL = 90
+                    self.DiffJPEG = DiffJPEG(differentiable=True, quality=int(NL)).cuda()
+                    y_forw = self.DiffJPEG(y_forw)
+                
+                elif choice == 2:
+                    vals = 10**4
+                    if random.random() < 0.5:
+                        noisy_img_tensor = torch.poisson(y_forw * vals) / vals
+                    else:
+                        img_gray_tensor = torch.mean(y_forw, dim=0, keepdim=True)
+                        noisy_gray_tensor = torch.poisson(img_gray_tensor * vals) / vals
+                        noisy_img_tensor = y_forw + (noisy_gray_tensor - img_gray_tensor)
+
+                    y_forw = torch.clamp(noisy_img_tensor, 0, 1)
+
+            else:
+
+                if add_noise:
+                    NL = self.opt['noisesigma'] / 255.0
+                    noise = np.random.normal(0, NL, y_forw.shape)
+                    torchnoise = torch.from_numpy(noise).cuda().float()
+                    y_forw = y_forw + torchnoise
+
+                elif add_jpeg:
+                    Q = self.opt['jpegfactor']
+                    self.DiffJPEG = DiffJPEG(differentiable=True, quality=int(Q)).cuda()
+                    y_forw = self.DiffJPEG(y_forw)
+
+                elif add_possion:
+                    vals = 10**4
+                    if random.random() < 0.5:
+                        noisy_img_tensor = torch.poisson(y_forw * vals) / vals
+                    else:
+                        img_gray_tensor = torch.mean(y_forw, dim=0, keepdim=True)
+                        noisy_gray_tensor = torch.poisson(img_gray_tensor * vals) / vals
+                        noisy_img_tensor = y_forw + (noisy_gray_tensor - img_gray_tensor)
+
+                    y_forw = torch.clamp(noisy_img_tensor, 0, 1)
+
+            # backward upscaling
+            if self.opt['hide']:
+                y = self.Quantization(y_forw)
+            else:
+                y = y_forw
+
+        return y_forw, y
+            
+    def extract(self, message, y_forw, y):    
+        with torch.no_grad():
+            forw_L = []
+            forw_L_h = []
+            fake_H = []
+            fake_H_h = []
+            pred_z = []
+            recmsglist = []
+            msglist = []
+            b, t, c, h, w = self.real_H.shape
+            b, n, t, c, h, w = self.ref_L.shape
+            if self.mode == "image":
+                out_x, out_x_h, out_z, recmessage = self.netG(x=y, rev=True)
+                out_x = iwt(out_x)
+
+                out_x_h = [iwt(out_x_h_i) for out_x_h_i in out_x_h]
+                out_x = out_x.reshape(-1, self.gop, 3, h, w)
+                out_x_h = torch.stack(out_x_h, dim=1)
+                out_x_h = out_x_h.reshape(-1, 1, self.gop, 3, h, w)
+
+                forw_L.append(y_forw)
+                fake_H.append(out_x[:, self.gop//2])
+                fake_H_h.append(out_x_h[:,:, self.gop//2])
+                recmsglist.append(recmessage)
+                msglist.append(message)
+            
+            elif self.mode == "bit":
+                recmessage = self.netG(x=y, rev=True)
+                forw_L.append(y_forw)
+                recmsglist.append(recmessage)
+                msglist.append(message)
+        if self.mode == "image":
+            fake_H = torch.clamp(torch.stack(fake_H, dim=1),0,1)
+            fake_H_h = torch.clamp(torch.stack(fake_H_h, dim=2),0,1)
+
+        forw_L = torch.clamp(torch.stack(forw_L, dim=1),0,1)
+        remesg = torch.clamp(torch.stack(recmsglist, dim=0),-0.5,0.5)
+
+        if self.opt['hide']:
+            mesg = torch.clamp(torch.stack(msglist, dim=0),-0.5,0.5)
+        else:
+            mesg = torch.stack(msglist, dim=0)
+
+        recmessage = remesg.clone()
+        recmessage[remesg > 0] = 1
+        recmessage[remesg <= 0] = 0
+
+        message = mesg.clone()
+        message[mesg > 0] = 1
+        message[mesg <= 0] = 0
+
+        # self.netG.train()
+
+        return fake_H, fake_H_h, forw_L, recmessage, message
+    
+    def get_visuals(self, ref_L, real_H, fake_H, fake_H_h, forw_L, recmessage, message):
+        b, n, t, c, h, w = ref_L.shape
+        center = t // 2
+        intval = self.gop // 2
+        out_dict = OrderedDict()
+        LR_ref = ref_L[:, :, center - intval:center + intval + 1].detach()[0].float().cpu()
+        LR_ref = torch.chunk(LR_ref, self.num_image, dim=0)
+        out_dict['LR_ref'] = [image.squeeze(0) for image in LR_ref]
+        
+        if self.mode == "image":
+            out_dict['SR'] = fake_H.detach()[0].float().cpu()
+            SR_h = fake_H_h.detach()[0].float().cpu()
+            SR_h = torch.chunk(SR_h, self.num_image, dim=0)
+            out_dict['SR_h'] = [image.squeeze(0) for image in SR_h]
+        
+        out_dict['LR'] = forw_L.detach()[0].float().cpu()
+        out_dict['GT'] = real_H[:, center - intval:center + intval + 1].detach()[0].float().cpu()
+        out_dict['message'] = message
+        out_dict['recmessage'] = recmessage
+
+        return out_dict

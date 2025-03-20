@@ -14,7 +14,10 @@ from utils import util
 from data import create_dataloader, create_dataset
 from models import create_model
 import numpy as np
-
+from utils.image_handler import split_all_images, combine_images_from_folder, combine_torch_tensors_4d, split_torch_tensors_4d, save_tensor_images, write_extracted_messages
+from utils.random_walk import random_walk_unique
+from utils.preprocess import load_pairs_from_file
+from utils.mapping import create_list_data
 
 def init_dist(backend='nccl', **kwargs):
     ''' initialization for distributed training'''
@@ -88,6 +91,9 @@ def main():
     torch.backends.cudnn.benchmark = True
     # torch.backends.cudnn.deterministic = True
 
+    # Step 1: Split images into 36 sub-images (comment if already done)
+    split_all_images(input_folder = opt['datasets']['TD']['data_path'], output_folder = opt['datasets']['TD']['split_path_ori'])
+
     #### create train and val dataloader
     dataset_ratio = 200  # enlarge the size of each epoch
     for phase, dataset_opt in opt['datasets'].items():
@@ -100,88 +106,164 @@ def main():
             val_loader = create_dataloader(val_set, dataset_opt, opt, None)
         else:
             raise NotImplementedError('Phase [{:s}] is not recognized.'.format(phase))
+    # for i, batch in enumerate(val_loader):
+    #     print(i)
+    #     print(batch['LQ'].shape)
 
-    # create model
+    # # create model
     model = create_model(opt)
     model.load_test(args.ckpt)
             
-    # validation
-    avg_psnr = 0.0
-    avg_psnr_h = [0.0]*opt['num_image']
-    avg_psnr_lr = 0.0
-    biterr = []
-    idx = 0
-    for image_id, val_data in enumerate(val_loader):
-        img_dir = os.path.join('results',opt['name'])
-        util.mkdir(img_dir)
+    # Create Random Walk
+    random_walk_squeuence = random_walk_unique()
+    print(random_walk_squeuence)
 
-        model.feed_data(val_data)
-        model.test(image_id)
+    # Load copyright and metadata from files
+    list_copyright_metadata = load_pairs_from_file(opt['datasets']['TD']['copyright_path'])
+    mapping_data = create_list_data(random_walk_squeuence, list_copyright_metadata[0][0], list_copyright_metadata[0][1])
+    print(mapping_data)
 
-        visuals = model.get_current_visuals()
+    for parent_image_id, val_data in enumerate(val_loader):
+        # img_dir = os.path.join('results',opt['name'])
+        # util.mkdir(img_dir)
 
-        t_step = visuals['SR'].shape[0]
-        idx += t_step
-        n = len(visuals['SR_h'])
+        # Step 1: Embed data into images
+        list_container = []
+        list_ref_L = []
+        list_real_H = []
+        for i in range(0, 36):
+            child_data = {
+                'LQ': val_data['LQ'][i],
+                'GT': val_data['GT'][i]
+            }
+            model.feed_data(child_data)
+            list_ref_L.append(model.ref_L)
+            list_real_H.append(model.real_H)
+            I_container = model.embed(*(mapping_data[i],) if i in mapping_data else ())
+            list_container.append(I_container)
 
-        a = visuals['recmessage'][0]
-        b = visuals['message'][0]
+        # Step 1.1: Save 36 images to folder
+        save_tensor_images(list_container, parent_image_id, opt['datasets']['TD']['split_path_con'])
 
-        bitrecord = util.decoded_message_error_rate_batch(a, b)
-        print(bitrecord)
-        biterr.append(bitrecord)
+        # Step 2: Combine 36 images into one (4 dimensions)
+        parent_container = combine_torch_tensors_4d(list_container)
 
-        for i in range(t_step):
+        # Step 2.1: Save parent_container to folder
+        parent_container_img = util.tensor2img(parent_container)
+        save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id).zfill(4)}.png')
+        util.save_img(parent_container_img, save_img_path)
 
-            sr_img = util.tensor2img(visuals['SR'][i])  # uint8
-            sr_img_h = []
-            for j in range(n):
-                sr_img_h.append(util.tensor2img(visuals['SR_h'][j][i]))  # uint8
-            gt_img = util.tensor2img(visuals['GT'][i])  # uint8
-            lr_img = util.tensor2img(visuals['LR'][i])
-            lrgt_img = []
-            for j in range(n):
-                lrgt_img.append(util.tensor2img(visuals['LR_ref'][j][i]))
+        # Step 3: Diffusion on parent_container
+        parent_y_forw, parent_y = model.diffusion(image_id = parent_image_id, y_forw = parent_container)
 
-            # Save SR images for reference
-            save_img_path = os.path.join(img_dir,'{:d}_{:d}_{:s}.png'.format(image_id, i, 'SR'))
-            util.save_img(sr_img, save_img_path)
+        # Step 3.1: Save parent_y_forw to folder
+        parent_rec_img = util.tensor2img(parent_y_forw)
+        save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id).zfill(4)}_diffusion.png')
+        util.save_img(parent_rec_img, save_img_path)
 
-            for j in range(n):
-                save_img_path = os.path.join(img_dir,'{:d}_{:d}_{:d}_{:s}.png'.format(image_id, i, j, 'SR_h'))
-                util.save_img(sr_img_h[j], save_img_path)
+        # Step 4: Split parent_rec into 36 images
+        list_container_rec = split_torch_tensors_4d(parent_y_forw)
+        list_container_rec_quantize = split_torch_tensors_4d(parent_y)
 
-            save_img_path = os.path.join(img_dir,'{:d}_{:d}_{:s}.png'.format(image_id, i, 'GT'))
-            util.save_img(gt_img, save_img_path)
+        # Step 4.1: Save 36 images to folder
+        save_tensor_images(list_container_rec, parent_image_id, opt['datasets']['TD']['split_path_rec'])
 
-            save_img_path = os.path.join(img_dir,'{:d}_{:d}_{:s}.png'.format(image_id, i, 'LR'))
-            util.save_img(lr_img, save_img_path)
+        list_fake_H = [], list_fake_H_h = [], list_forw_L = [], list_recmessage = [], list_message = []
 
-            for j in range(n):
-                save_img_path = os.path.join(img_dir,'{:d}_{:d}_{:d}_{:s}.png'.format(image_id, i, j, 'LRGT'))
-                util.save_img(lrgt_img[j], save_img_path)
+        # Step 5: Extract from 36 images
+        for i in range(0, 36):
+            fake_H, fake_H_h, forw_L, recmessage, message = model.extract(*(mapping_data[i],) if i in mapping_data else (), y_forw = list_container_rec[i], y = list_container_rec_quantize[i])
+            list_fake_H.append(fake_H)
+            list_fake_H_h.append(fake_H_h)
+            list_forw_L.append(forw_L)
+            list_recmessage.append(recmessage)
+            list_message.append(message)
 
-            psnr = cal_pnsr(sr_img, gt_img)
-            psnr_h = []
-            for j in range(n):
-                psnr_h.append(cal_pnsr(sr_img_h[j], lrgt_img[j]))
-            psnr_lr = cal_pnsr(lr_img, gt_img)
+        # Step 5.1: Save all messages to file
+        write_extracted_messages(parent_image_id, list_message, list_recmessage, opt['datasets']['TD']['copyright_output'])
+            
 
-            avg_psnr += psnr
-            for j in range(n):
-                avg_psnr_h[j] += psnr_h[j]
-            avg_psnr_lr += psnr_lr
+    # # validation
+    # # avg_psnr = 0.0
+    # # avg_psnr_h = [0.0]*opt['num_image']
+    # # avg_psnr_lr = 0.0
+    # # biterr = []
+    # # idx = 0
+    # for parent_image_id, val_data in enumerate(val_loader):
+    #     img_dir = os.path.join('results',opt['name'])
+    #     util.mkdir(img_dir)
+    #     for i in range(0, 36):
+    #         child_data = {
+    #             'LQ': val_data['LQ'][i],
+    #             'GT': val_data['GT'][i]
+    #         }
+    #         model.feed_data(child_data)
+    #         model.test(image_id)
 
-    avg_psnr = avg_psnr / idx
-    avg_biterr = sum(biterr) / len(biterr)
-    print(get_min_avg_and_indices(biterr))
+    #         visuals = model.get_current_visuals()
 
-    avg_psnr_h = [psnr / idx for psnr in avg_psnr_h]
-    avg_psnr_lr = avg_psnr_lr / idx
-    res_psnr_h = ''
-    for p in avg_psnr_h:
-        res_psnr_h+=('_{:.4e}'.format(p))
-    print('# Validation # PSNR_Cover: {:.4e}, PSNR_Secret: {:s}, PSNR_Stego: {:.4e},  Bit_Error: {:.4e}'.format(avg_psnr, res_psnr_h, avg_psnr_lr, avg_biterr))
+    #         t_step = visuals['SR'].shape[0]
+    #         idx += t_step
+    #         n = len(visuals['SR_h'])
+
+    #         a = visuals['recmessage'][0]
+    #         b = visuals['message'][0]
+
+    #         # bitrecord = util.decoded_message_error_rate_batch(a, b)
+    #         # print(bitrecord)
+    #         # biterr.append(bitrecord)
+
+    #         for i in range(t_step):
+
+    #             sr_img = util.tensor2img(visuals['SR'][i])  # uint8
+    #             sr_img_h = []
+    #             for j in range(n):
+    #                 sr_img_h.append(util.tensor2img(visuals['SR_h'][j][i]))  # uint8
+    #             gt_img = util.tensor2img(visuals['GT'][i])  # uint8
+    #             lr_img = util.tensor2img(visuals['LR'][i])
+    #             lrgt_img = []
+    #             for j in range(n):
+    #                 lrgt_img.append(util.tensor2img(visuals['LR_ref'][j][i]))
+
+    #             # Save SR images for reference
+    #             save_img_path = os.path.join(img_dir,'{:d}_{:d}_{:s}.png'.format(image_id, i, 'SR'))
+    #             util.save_img(sr_img, save_img_path)
+
+    #             for j in range(n):
+    #                 save_img_path = os.path.join(img_dir,'{:d}_{:d}_{:d}_{:s}.png'.format(image_id, i, j, 'SR_h'))
+    #                 util.save_img(sr_img_h[j], save_img_path)
+
+    #             save_img_path = os.path.join(img_dir,'{:d}_{:d}_{:s}.png'.format(image_id, i, 'GT'))
+    #             util.save_img(gt_img, save_img_path)
+
+    #             save_img_path = os.path.join(img_dir,'{:d}_{:d}_{:s}.png'.format(image_id, i, 'LR'))
+    #             util.save_img(lr_img, save_img_path)
+
+    #             for j in range(n):
+    #                 save_img_path = os.path.join(img_dir,'{:d}_{:d}_{:d}_{:s}.png'.format(image_id, i, j, 'LRGT'))
+    #                 util.save_img(lrgt_img[j], save_img_path)
+
+    #             # psnr = cal_pnsr(sr_img, gt_img)
+    #             # psnr_h = []
+    #             # for j in range(n):
+    #             #     psnr_h.append(cal_pnsr(sr_img_h[j], lrgt_img[j]))
+    #             # psnr_lr = cal_pnsr(lr_img, gt_img)
+
+    #             # avg_psnr += psnr
+    #             # for j in range(n):
+    #             #     avg_psnr_h[j] += psnr_h[j]
+    #             # avg_psnr_lr += psnr_lr
+
+    # # avg_psnr = avg_psnr / idx
+    # # avg_biterr = sum(biterr) / len(biterr)
+    # # print(get_min_avg_and_indices(biterr))
+
+    # # avg_psnr_h = [psnr / idx for psnr in avg_psnr_h]
+    # # avg_psnr_lr = avg_psnr_lr / idx
+    # # res_psnr_h = ''
+    # # for p in avg_psnr_h:
+    # #     res_psnr_h+=('_{:.4e}'.format(p))
+    # # print('# Validation # PSNR_Cover: {:.4e}, PSNR_Secret: {:s}, PSNR_Stego: {:.4e},  Bit_Error: {:.4e}'.format(avg_psnr, res_psnr_h, avg_psnr_lr, avg_biterr))
 
 
 if __name__ == '__main__':
