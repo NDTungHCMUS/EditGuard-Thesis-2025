@@ -151,8 +151,8 @@ def main():
         # Step 2: Combine 36 images into one (4 dimensions)
         parent_container = combine_torch_tensors_4d(list_container)
         parent_container = torch.nn.functional.interpolate(parent_container, size=(512, 512), mode='nearest', align_corners=None)
-        print("Shape của parent container: ", parent_container.shape)
-        print("Giá trị của Parent container: ", parent_container)
+        # print("Shape của parent container: ", parent_container.shape)
+        # print("Giá trị của Parent container: ", parent_container)
 
         # Step 2.1: Save parent_container to folder
         parent_container = parent_container.detach()[0].float().cpu()

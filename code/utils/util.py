@@ -127,7 +127,16 @@ def tensor2img(tensor, out_type=np.uint8, min_max=(0, 1)):
 
 
 def save_img(img, img_path, mode='RGB'):
-    cv2.imwrite(img_path, img)
+    # Nếu thư mục chưa tồn tại, tạo nó
+    os.makedirs(os.path.dirname(img_path), exist_ok=True)
+    # Lưu ảnh với cv2.imwrite. Lưu ý: OpenCV lưu ảnh ở định dạng BGR, nếu ảnh của bạn là RGB hãy chuyển đổi trước.
+    # Ở đây, tensor2img đã chuyển đổi kênh từ RGB sang BGR nên không cần chuyển đổi lại.
+    result = cv2.imwrite(img_path, img)
+    if not result:
+        print("Lưu ảnh không thành công tại:", img_path)
+    else:
+        print("Lưu ảnh thành công tại:", img_path)
+
 
 
 ####################
