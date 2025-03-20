@@ -219,7 +219,7 @@ def save_tensor_images(list_container, parent_image_id, output_dir='a', out_type
         out_type: Kiểu dữ liệu đầu ra của ảnh (mặc định np.uint8).
         min_max (tuple): Khoảng giá trị để chuẩn hóa tensor (mặc định (0,1)).
     """
-    folder_name = str(parent_image_id).zfill(4)
+    folder_name = str(parent_image_id + 1).zfill(4)
     output_folder = os.path.join(output_dir, folder_name)
     os.makedirs(output_folder, exist_ok=True)
 
@@ -228,7 +228,7 @@ def save_tensor_images(list_container, parent_image_id, output_dir='a', out_type
         img_np = tensor2img(tensor, out_type=out_type, min_max=min_max)
         
         # Tạo tên file theo định dạng: 0001.png, 0002.png, ...
-        file_name = f"{str(i+1).zfill(4)}.png"
+        file_name = f"{i}.png"
         file_path = os.path.join(output_folder, file_name)
         
         # Lưu ảnh sử dụng hàm save_img
