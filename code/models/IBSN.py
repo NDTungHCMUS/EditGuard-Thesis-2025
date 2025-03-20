@@ -761,6 +761,9 @@ class Model_VSN(BaseModel):
                 self.output, container = self.netG(x=dwt(self.host.reshape(b, -1, h, w)), x_h=self.secret, message=message)
                 y_forw = container
                 self.container = container.clone()
+            print("Shape của self.host: ", self.host.shape)
+            print("Shape của self.secret: ", self.secret.shape)
+            print("Shape của self.container: ", self.container.shape)
         return self.container
 
     def diffusion(self, image_id, y_forw):
