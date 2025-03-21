@@ -146,7 +146,7 @@ def main():
             list_container.append(I_container)
 
         # Step 1.1: Save 36 images to folder
-        save_tensor_images(list_container, parent_image_id, opt['datasets']['TD']['split_path_con'])
+        # save_tensor_images(list_container, parent_image_id, opt['datasets']['TD']['split_path_con'])
 
         # Step 2: Combine 36 images into one (4 dimensions)
         parent_container = combine_torch_tensors_4d(list_container)
@@ -156,10 +156,10 @@ def main():
 
         # Step 2.1: Save parent_container to folder
         parent_container_img = util.tensor2img(parent_container.detach()[0].float().cpu())
-        save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id).zfill(4)}.png')
+        # save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id).zfill(4)}.png')
         # print("Save img path: ", save_img_path)
         # print("Ảnh parent cần lưu: ", parent_container_img)
-        util.save_img(parent_container_img, save_img_path)
+        # util.save_img(parent_container_img, save_img_path)
 
         # Step 3: Diffusion on parent_container
         parent_y_forw, parent_y = model.diffusion(image_id = parent_image_id, y_forw = parent_container)
@@ -167,28 +167,37 @@ def main():
         # Step 3.1: Save parent_y_forw to folder
         parent_rec_img = util.tensor2img(parent_y_forw)
         save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id).zfill(4)}_diffusion.png')
-        util.save_img(parent_rec_img, save_img_path)
+        # util.save_img(parent_rec_img, save_img_path)
 
-    #     # Step 4: Split parent_rec into 36 images
-    #     list_container_rec = split_torch_tensors_4d(parent_y_forw)
-    #     list_container_rec_quantize = split_torch_tensors_4d(parent_y)
+        # Step 4: Split parent_rec into 36 images
+        parent_y_forw = torch.nn.functional.interpolate(parent_y_forw, size=(512 * 6, 512 * 6), mode='nearest', align_corners=None)
+        parent_y = torch.nn.functional.interpolate(parent_y, size=(512 * 6, 512 * 6), mode='nearest', align_corners=None)
+        list_container_rec = split_torch_tensors_4d(parent_y_forw)
+        list_container_rec_quantize = split_torch_tensors_4d(parent_y)
+        
+        # Step 4.1: Save 36 images to folder
+        save_tensor_images(list_container_rec, parent_image_id, opt['datasets']['TD']['split_path_rec'])
+        print("Shape of list_container_rec[0]:", list_container_rec[0].shape)
+        for i in range(len(list_container_rec)):
+            print(f"List_container_rec {i}", list_container_rec[i])
+            
+        list_fake_H = []
+        list_fake_H_h = []
+        list_forw_L = []
+        list_recmessage = []
+        list_message = []
 
-    #     # Step 4.1: Save 36 images to folder
-    #     save_tensor_images(list_container_rec, parent_image_id, opt['datasets']['TD']['split_path_rec'])
+        # Step 5: Extract from 36 images
+        for i in range(0, 36):
+            fake_H, fake_H_h, forw_L, recmessage, message = model.extract(*(mapping_data[i],) if i in mapping_data else ("0" * 64,), y_forw = list_container_rec[i], y = list_container_rec_quantize[i])
+            list_fake_H.append(fake_H)
+            list_fake_H_h.append(fake_H_h)
+            list_forw_L.append(forw_L)
+            list_recmessage.append(recmessage)
+            list_message.append(message)
 
-    #     list_fake_H = [], list_fake_H_h = [], list_forw_L = [], list_recmessage = [], list_message = []
-
-    #     # Step 5: Extract from 36 images
-    #     for i in range(0, 36):
-    #         fake_H, fake_H_h, forw_L, recmessage, message = model.extract(*(mapping_data[i],) if i in mapping_data else (), y_forw = list_container_rec[i], y = list_container_rec_quantize[i])
-    #         list_fake_H.append(fake_H)
-    #         list_fake_H_h.append(fake_H_h)
-    #         list_forw_L.append(forw_L)
-    #         list_recmessage.append(recmessage)
-    #         list_message.append(message)
-
-    #     # Step 5.1: Save all messages to file
-    #     write_extracted_messages(parent_image_id, list_message, list_recmessage, opt['datasets']['TD']['copyright_output'])
+        # Step 5.1: Save all messages to file
+        write_extracted_messages(parent_image_id, list_message, list_recmessage, opt['datasets']['TD']['copyright_output'])
             
 
     # # validation
