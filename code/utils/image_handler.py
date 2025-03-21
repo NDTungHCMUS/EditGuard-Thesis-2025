@@ -3,7 +3,7 @@ import torchvision.transforms.functional as TF
 from PIL import Image
 import os
 import numpy as np
-from .util import save_img, tensor2img
+from .util import save_img, tensor2img, decoded_message_error_rate
 
 def split_and_save_image_torch(image_path, output_folder="images"):
     """
@@ -183,7 +183,7 @@ def split_torch_tensors_4d(parent_container_grid):
     
     return patches
 
-combine_all_images("E:/Year_4/Thesis/EditGuard-Split-Image/dataset/valAGE-Set-5-eles-split-ori", "E:/Year_4/Thesis/EditGuard-Split-Image/dataset/valAGE-Set-5-eles-merge")  # Gom ảnh từ thư mục images và lưu ra output.jpg
+# combine_all_images("E:/Year_4/Thesis/EditGuard-Split-Image/dataset/valAGE-Set-5-eles-split-ori", "E:/Year_4/Thesis/EditGuard-Split-Image/dataset/valAGE-Set-5-eles-merge")  # Gom ảnh từ thư mục images và lưu ra output.jpg
 
 def tensor_to_pil(tensor):
     """
@@ -237,22 +237,85 @@ def save_tensor_images(list_container, parent_image_id, output_dir='a', out_type
 
 def write_extracted_messages(parent_image_id, list_message, list_recmessage, out_file_path):
     """
-    Ghi thông tin các hàng vào file text với định dạng:
-    parent_image_id, child_image_id, message, recmessage
-    
+    Append thông tin của các ảnh con vào file text theo định dạng:
+      Line 1: parent_image_id,child_image_id
+      Line 2: message (dưới dạng tensor)
+      Line 3: recmessage (dưới dạng tensor)
+      Line 4: error_rate của cặp
+      Line 5: dòng trống phân cách
+
+    Sau đó, ghi và in thêm một dòng cho trung bình error rate của tất cả các ảnh con.
+
+    Nếu message và recmessage là tensor, giữ nguyên tensor và tính error rate bằng
+    hàm decoded_message_error_rate (hoặc decoded_message_error_rate_batch) đã định nghĩa sẵn.
+
     Args:
         parent_image_id (int hoặc str): ID của ảnh cha.
         list_message (list): Danh sách các message từ 36 ảnh con.
         list_recmessage (list): Danh sách các recmessage từ 36 ảnh con.
         out_file_path (str): Đường dẫn file text sẽ được lưu.
     """
-    with open(out_file_path, 'w', encoding='utf-8') as f:
-        # Ghi header nếu cần
-        f.write("parent_image_id,child_image_id,message,recmessage\n")
-        # Giả sử list_message và list_recmessage có độ dài 36
+    import os
+    import torch
+
+    error_rates = []  # Lưu error_rate cho từng cặp message/recmessage
+
+    # Kiểm tra file có tồn tại không, để quyết định ghi header hay append
+    file_exists = os.path.exists(out_file_path)
+    with open(out_file_path, 'a', encoding='utf-8') as f:
+        if not file_exists:
+            f.write("Extracted Messages:\n\n")
+        
         for child_image_id, (message, recmessage) in enumerate(zip(list_message, list_recmessage)):
+            # Tính error rate cho cặp message, recmessage
+            try:
+                # Gọi hàm decoded_message_error_rate (giữ nguyên không sửa)
+                error_rate = decoded_message_error_rate(message, recmessage)
+            except Exception as e:
+                # Nếu có lỗi (ví dụ do việc convert tensor với nhiều phần tử), sử dụng fallback:
+                message_flat = message.view(message.shape[0], -1).squeeze()
+                recmessage_flat = recmessage.view(recmessage.shape[0], -1).squeeze()
+                error_count = sum([int(x.item()) for x in (message_flat.gt(0) != recmessage_flat.gt(0))])
+                length = message_flat.numel()
+                error_rate = error_count / length
+
+            # Nếu error_rate là tensor, chuyển về float
+            if isinstance(error_rate, torch.Tensor):
+                error_rate = error_rate.item()
+            
+            error_rates.append(error_rate)
+            
+            # Giữ nguyên tensor bằng string representation
+            message_str = str(message)
+            recmessage_str = str(recmessage)
+            
             # Định dạng parent_image_id và child_image_id thành 4 chữ số
             parent_str = str(parent_image_id).zfill(4)
             child_str = str(child_image_id).zfill(4)
-            # Ghi ra một dòng
-            f.write(f"{parent_str},{child_str},{message},{recmessage}\n")
+            
+            # Ghi vào file với định dạng theo yêu cầu:
+            # Line 1: parent_image_id,child_image_id
+            f.write(f"{parent_str},{child_str}\n")
+            # Line 2: message
+            f.write(f"{message_str}\n")
+            # Line 3: recmessage
+            f.write(f"{recmessage_str}\n")
+            # Line 4: error_rate
+            f.write(f"{error_rate}\n")
+            # Line 5: dòng trống phân cách
+            f.write("\n")
+            
+            # In ra theo định dạng: message -> xuống hàng recmessage -> xuống hàng error
+            print(f"{message_str}\n{recmessage_str}\n{error_rate}\n")
+        
+        # Tính trung bình error rate nếu có giá trị tính được
+        if error_rates:
+            avg_error = sum(error_rates) / len(error_rates)
+        else:
+            avg_error = "N/A"
+        
+        # Ghi và in ra trung bình error rate
+        f.write("Average error rate:\n")
+        f.write(f"{avg_error}\n")
+        print("Average error rate:")
+        print(avg_error)
