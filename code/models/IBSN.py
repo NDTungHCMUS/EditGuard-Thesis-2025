@@ -750,14 +750,14 @@ class Model_VSN(BaseModel):
         with torch.no_grad():
             b, t, c, h, w = self.real_H.shape
             center = t // 2
-            intval = self.gop // 2
+            intval = self.gop // 2 
             b, n, t, c, h, w = self.ref_L.shape
             id=0
             # forward downscaling
-            self.host = self.real_H[:, center - intval+id:center + intval + 1+id]
-            self.secret = self.ref_L[:, :, center - intval+id:center + intval + 1+id]
-            self.secret = [dwt(self.secret[:,i].reshape(b, -1, h, w)) for i in range(n)]
-
+            self.host = self.real_H[:, center - intval+id:center + intval + 1+id] # 1 list 1 phần tử, mỗi phần tử 4 chiều (1, 3, h, w)
+            self.secret = self.ref_L[:, :, center - intval+id:center + intval + 1+id] 
+            self.secret = [dwt(self.secret[:,i].reshape(b, -1, h, w)) for i in range(n)] # 1 list 1 phàn tử, mỗi phần tử 4 chiều (1, 4 * c, h, w)
+    
             # print("Len của self.host: ", len(self.host))
             # print("Len của self.secret: ", len(self.secret))
             # print("Shape của Self.host: ", self.host[0].shape)
