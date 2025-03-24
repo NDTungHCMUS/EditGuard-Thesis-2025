@@ -745,8 +745,11 @@ class Model_VSN(BaseModel):
     def save(self, iter_label):
         self.save_network(self.netG, 'G', iter_label)
 
-    def embed(self, message = "0"*64):
+    def embed(self):
         self.netG.eval()
+        messagenp = np.random.choice([-0.5, 0.5], (self.ref_L.shape[0], self.opt['message_length']))
+
+        message = torch.Tensor(messagenp).to(self.device)
         with torch.no_grad():
             b, t, c, h, w = self.real_H.shape
             center = t // 2
@@ -764,9 +767,7 @@ class Model_VSN(BaseModel):
             # print("Shape của Self.secret: ", self.secret[0].shape)
             # print("Self.host: ", self.host)
             # print("Self.secret: ", self.secret)
-            messagenp = bit_string_to_messagenp(message, batch_size=1)
-
-            message = torch.Tensor(messagenp).to(self.device)
+            
 
             # print("Message [-0.5, 0.5]: ", message)
 
@@ -775,7 +776,7 @@ class Model_VSN(BaseModel):
                 y_forw = container
                 self.container = container.clone()
             print("Shape của self.container: ", self.container.shape)
-        return self.container
+        return self.container, message
 
     def diffusion(self, image_id, y_forw):
         add_noise = self.opt['addnoise']
@@ -796,9 +797,9 @@ class Model_VSN(BaseModel):
 
                 for j in range(b):
                     i = image_id + 1
-                    masksrc = "../dataset/valAGE-Set-Mask-5-eles/"
+                    masksrc = "../dataset/valAGE-Set-Mask-10-eles-1024px/"
                     mask_image = Image.open(masksrc + str(i).zfill(4) + ".png").convert("L")
-                    mask_image = mask_image.resize((512, 512))
+                    # mask_image = mask_image.resize((512, 512))
                     h, w = mask_image.size
                     
                     image = image_batch[j, :, :, :]
@@ -872,9 +873,9 @@ class Model_VSN(BaseModel):
         return y_forw, y
             
     def extract(self, message, y_forw, y):    
-        messagenp = bit_string_to_messagenp(message, batch_size=1)
+        # messagenp = bit_string_to_messagenp(message, batch_size=1)
 
-        message = torch.Tensor(messagenp).to(self.device)
+        # message = torch.Tensor(messagenp).to(self.device)
         with torch.no_grad():
             forw_L = []
             forw_L_h = []

@@ -92,9 +92,9 @@ def main():
     # torch.backends.cudnn.deterministic = True
 
     # Step 1: Split images into 36 sub-images (comment if already done)
-    # split_all_images(input_folder = opt['datasets']['TD']['data_path'], output_folder = opt['datasets']['TD']['split_path_ori'])
+    # split_all_images(input_folder = opt['datasets']['TD']['data_path'], output_folder = opt['datasets']['TD']['split_path_ori'], grid_size = 2)
 
-    ### create train and val dataloader
+    ## create train and val dataloader
     dataset_ratio = 200  # enlarge the size of each epoch
     for phase, dataset_opt in opt['datasets'].items():
         print("phase", phase)
@@ -106,23 +106,23 @@ def main():
             val_loader = create_dataloader(val_set, dataset_opt, opt, None)
         else:
             raise NotImplementedError('Phase [{:s}] is not recognized.'.format(phase))
-    # for i, batch in enumerate(val_loader):
-    #     print(i)
-    #     print("SHAPE OF a batch:", batch['LQ'].shape)
+    # # for i, batch in enumerate(val_loader):
+    # #     print(i)
+    # #     print("SHAPE OF a batch:", batch['LQ'].shape)
 
     # # # create model
     model = create_model(opt)
     model.load_test(args.ckpt)
-            
+      
     # # Create Random Walk
-    random_walk_squeuence = random_walk_unique()
-    print("RANDOM WALK:", random_walk_squeuence)
+    # random_walk_squeuence = random_walk_unique()
+    # print("RANDOM WALK:", random_walk_squeuence)
 
     # # Load copyright and metadata from files
-    list_copyright_metadata = load_pairs_from_file(opt['datasets']['TD']['copyright_path'])
-    mapping_data = create_list_data(random_walk_squeuence, list_copyright_metadata[0][0], list_copyright_metadata[0][1])
-    print("MAPPING_DATA:", mapping_data)
-
+    # list_copyright_metadata = load_pairs_from_file(opt['datasets']['TD']['copyright_path'])
+    # mapping_data = create_list_data(random_walk_squeuence, list_copyright_metadata[0][0], list_copyright_metadata[0][1])
+    # print("MAPPING_DATA:", mapping_data)
+    n = 2
     for parent_image_id, val_data in enumerate(val_loader):
         # img_dir = os.path.join('results',opt['name'])
         # util.mkdir(img_dir)
@@ -131,7 +131,8 @@ def main():
         list_container = []
         list_ref_L = []
         list_real_H = []
-        for i in range(0, 36):
+        list_message = []
+        for i in range(0, n * n):
             child_data = {
                 'LQ': val_data['LQ'][i].unsqueeze(0),
                 'GT': val_data['GT'][i].unsqueeze(0)
@@ -142,24 +143,24 @@ def main():
             model.feed_data(child_data)
             list_ref_L.append(model.ref_L)
             list_real_H.append(model.real_H)
-            I_container = model.embed(*(mapping_data[i],) if i in mapping_data else ())
+            I_container, message = model.embed()
+            list_message.append(message)
+            print("MESSAGE:",message)
             list_container.append(I_container)
 
-        # Step 1.1: Save 36 images to folder
-        # save_tensor_images(list_container, parent_image_id, opt['datasets']['TD']['split_path_con'])
+        # Step 1.1: Save n^2 images to folder
+        save_tensor_images(list_container, parent_image_id, opt['datasets']['TD']['split_path_con'])
 
-        # Step 2: Combine 36 images into one (4 dimensions)
-        parent_container = combine_torch_tensors_4d(list_container)
-        parent_container = torch.nn.functional.interpolate(parent_container, size=(512, 512), mode='nearest', align_corners=None)
+        # Step 2: Combine n^2 images into one (4 dimensions)
+        parent_container = combine_torch_tensors_4d(list_container, num_images = n * n)
+        # parent_container = torch.nn.functional.interpolate(parent_container, size=(512, 512), mode='nearest', align_corners=None)
         # print("Shape của parent container: ", parent_container.shape)
         # print("Giá trị của Parent container: ", parent_container)
 
         # Step 2.1: Save parent_container to folder
         parent_container_img = util.tensor2img(parent_container.detach()[0].float().cpu())
-        # save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id).zfill(4)}.png')
-        # print("Save img path: ", save_img_path)
-        # print("Ảnh parent cần lưu: ", parent_container_img)
-        # util.save_img(parent_container_img, save_img_path)
+        save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id).zfill(4)}.png')
+        util.save_img(parent_container_img, save_img_path)
 
         # Step 3: Diffusion on parent_container
         parent_y_forw, parent_y = model.diffusion(image_id = parent_image_id, y_forw = parent_container)
@@ -167,29 +168,26 @@ def main():
         # Step 3.1: Save parent_y_forw to folder
         parent_rec_img = util.tensor2img(parent_y_forw)
         save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id).zfill(4)}_diffusion.png')
-        # util.save_img(parent_rec_img, save_img_path)
+        util.save_img(parent_rec_img, save_img_path)
 
-        # Step 4: Split parent_rec into 36 images
-        parent_y_forw = torch.nn.functional.interpolate(parent_y_forw, size=(512 * 6, 512 * 6), mode='nearest', align_corners=None)
-        parent_y = torch.nn.functional.interpolate(parent_y, size=(512 * 6, 512 * 6), mode='nearest', align_corners=None)
-        list_container_rec = split_torch_tensors_4d(parent_y_forw)
-        list_container_rec_quantize = split_torch_tensors_4d(parent_y)
+        # Step 4: Split parent_rec into n^2 images
+        list_container_rec = split_torch_tensors_4d(parent_y_forw, grid_size = n)
+        list_container_rec_quantize = split_torch_tensors_4d(parent_y, grid_size = n)
         
-        # Step 4.1: Save 36 images to folder
+        # Step 4.1: Save n^2 images to folder
         save_tensor_images(list_container_rec, parent_image_id, opt['datasets']['TD']['split_path_rec'])
-        print("Shape of list_container_rec[0]:", list_container_rec[0].shape)
-        for i in range(len(list_container_rec)):
-            print(f"List_container_rec {i}", list_container_rec[i])
+        # print("Shape of list_container_rec[0]:", list_container_rec[0].shape)
+        # for i in range(len(list_container_rec)):
+        #     print(f"List_container_rec {i}", list_container_rec[i])
             
         list_fake_H = []
         list_fake_H_h = []
         list_forw_L = []
         list_recmessage = []
-        list_message = []
-
+        print("LENGTH of list message: ", len(list_message))
         # Step 5: Extract from 36 images
-        for i in range(0, 36):
-            fake_H, fake_H_h, forw_L, recmessage, message = model.extract(*(mapping_data[i],) if i in mapping_data else ("0" * 64,), y_forw = list_container_rec[i], y = list_container_rec_quantize[i])
+        for i in range(0, n * n):
+            fake_H, fake_H_h, forw_L, recmessage, message = model.extract(list_message[i], y_forw = list_container_rec[i], y = list_container_rec_quantize[i])
             list_fake_H.append(fake_H)
             list_fake_H_h.append(fake_H_h)
             list_forw_L.append(forw_L)
