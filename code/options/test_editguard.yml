@@ -34,18 +34,18 @@ mode: image
 
 datasets:
   TD:
-    num_image: 36
+    num_image: 4
     name: AGE-Set
     mode: td
 
-    data_path: ../dataset/valAGE-Set-5-eles
-    txt_path:  ../dataset/sep_testlist_5-eles.txt
-    copyright_path: ../dataset/copyright-5-eles.txt
-    split_path_ori: ../dataset/valAGE-Set-5-eles-split-ori
-    split_path_con: ../dataset/valAGE-Set-5-eles-split-con
-    split_path_rec: ../dataset/valAGE-Set-5-eles-split-rec
-    merge_path: ../dataset/valAGE-Set-5-eles-merge
-    copyright_output: ../dataset/copyright-5-eles-output.txt
+    data_path: ../dataset/valAGE-Set-10-eles-1024px
+    txt_path:  ../dataset/sep_testlist_3-eles.txt
+    copyright_path: ../dataset/copyright-10-eles.txt
+    split_path_ori: ../dataset/valAGE-Set-10-eles-1024px-split-ori
+    split_path_con: ../dataset/valAGE-Set-10-eles-1024px-split-con
+    split_path_rec: ../dataset/valAGE-Set-10-eles-1024px-split-rec
+    merge_path: ../dataset/valAGE-Set-10-eles-1024px-merge
+    copyright_output: ../dataset/copyright-10-eles-1024px-output.txt
     N_frames: 1
     padding: 'new_info'
     pred_interval: -1
