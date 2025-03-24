@@ -3,30 +3,40 @@ import torchvision.transforms.functional as TF
 from PIL import Image
 import os
 import numpy as np
+import math
 from .util import save_img, tensor2img, decoded_message_error_rate
 
-def split_and_save_image_torch(image_path, output_folder="images"):
+def split_and_save_image_torch(image_path, output_folder="images", grid_size=6):
     """
-    Chia ảnh thành 36 phần bằng nhau và lưu vào thư mục images.
-
+    Chia ảnh thành grid_size x grid_size phần bằng nhau và lưu vào thư mục output_folder.
+    
     Args:
         image_path (str): Đường dẫn đến ảnh.
         output_folder (str): Thư mục để lưu ảnh.
-    """
-    # Đọc ảnh với PIL
-    img = Image.open(image_path).convert("RGB")
-    img_tensor = TF.to_tensor(img)  # Chuyển thành tensor (C, H, W)
-
-    C, H, W = img_tensor.shape
-    h, w = H // 6, W // 6  # Kích thước mỗi patch
+        grid_size (int): Số phần theo mỗi chiều (mặc định 6, tức 36 phần).
     
-    os.makedirs(output_folder, exist_ok=True)  # Tạo thư mục nếu chưa có
-
+    Yêu cầu:
+        - Chiều cao (H) và chiều rộng (W) của ảnh phải chia hết cho grid_size.
+    """
+    # Đọc ảnh với PIL và chuyển thành RGB
+    img = Image.open(image_path).convert("RGB")
+    # Chuyển ảnh thành tensor có shape (C, H, W)
+    img_tensor = TF.to_tensor(img)
+    
+    C, H, W = img_tensor.shape
+    if H % grid_size != 0 or W % grid_size != 0:
+        raise ValueError(f"Chiều cao H={H} và chiều rộng W={W} của ảnh phải chia hết cho grid_size {grid_size}.")
+    
+    patch_H = H // grid_size
+    patch_W = W // grid_size
+    
+    os.makedirs(output_folder, exist_ok=True)  # Tạo thư mục nếu chưa tồn tại
+    
     count = 0
-    for i in range(6):
-        for j in range(6):
-            patch = img_tensor[:, i*h:(i+1)*h, j*w:(j+1)*w]  # Cắt từng phần
-            patch_img = TF.to_pil_image(patch)  # Chuyển lại thành ảnh PIL
+    for i in range(grid_size):
+        for j in range(grid_size):
+            patch = img_tensor[:, i * patch_H:(i + 1) * patch_H, j * patch_W:(j + 1) * patch_W]
+            patch_img = TF.to_pil_image(patch)
             patch_img.save(os.path.join(output_folder, f"{count}.png"))
             count += 1
 
@@ -54,45 +64,64 @@ def split_all_images(input_folder="A", output_folder="B"):
 # split_and_save_image_torch("input.jpg") 
 
 # Combine tất cả ảnh trong thư mục input thành 1 ảnh lớn lưu trong thư mục output
-def combine_images_from_folder(input_folder, output_folder):
+def combine_images_from_folder(input_folder, output_folder, num_images=36):
     """
-    Gom 36 ảnh trong folder thành một ảnh lớn theo dạng lưới 6x6.
-    Các ảnh nhỏ được đặt tên: 0.png, 1.png, ..., 35.png.
-
+    Gom num_images ảnh trong folder thành một ảnh lớn theo dạng lưới √num_images x √num_images.
+    Mặc định num_images = 36 (6x6). Có thể thay đổi thành 4 (2x2) hoặc 9 (3x3).
+    
     Args:
         input_folder (str): Đường dẫn chứa các ảnh nhỏ (ví dụ: a/dataset/0001).
         output_folder (str): Đường dẫn chứa ảnh tổng hợp (ví dụ: b/dataset).
+        num_images (int): Số lượng ảnh muốn ghép (nên là số chính phương: 4, 9, 16, 25, 36,...).
     """
-    # Tạo folder chứa ảnh tổng hợp nếu chưa tồn tại
+    # Kiểm tra num_images có phải số chính phương hay không
+    root = int(math.sqrt(num_images))
+    if root * root != num_images:
+        raise ValueError(f"num_images = {num_images} không phải số chính phương (4, 9, 16, 25, 36, ...)")
+
+    # Tạo thư mục đầu ra nếu chưa tồn tại
     os.makedirs(output_folder, exist_ok=True)
-    
-    # Load 36 ảnh theo thứ tự từ 0.png đến 35.png
+
+    # Lấy danh sách file .png trong thư mục
+    all_files = sorted([
+        f for f in os.listdir(input_folder)
+        if f.lower().endswith('.png')
+    ])
+
+    # Kiểm tra xem đủ ảnh hay không
+    if len(all_files) < num_images:
+        raise ValueError(
+            f"Số ảnh trong thư mục {input_folder} không đủ (tìm thấy {len(all_files)}, yêu cầu {num_images})."
+        )
+
+    # Chỉ lấy đúng num_images file đầu tiên (hoặc theo nhu cầu)
+    selected_files = all_files[:num_images]
+
+    # Đọc ảnh từ danh sách file
     patches = []
-    for i in range(36):
-        patch_path = os.path.join(input_folder, f"{i}.png")
-        if not os.path.exists(patch_path):
-            raise FileNotFoundError(f"File {patch_path} không tồn tại!")
+    for filename in selected_files:
+        patch_path = os.path.join(input_folder, filename)
         patch = Image.open(patch_path)
         patches.append(patch)
-    
-    # Giả sử tất cả các ảnh đều có cùng kích thước
+
+    # Giả sử tất cả ảnh có cùng kích thước
     patch_width, patch_height = patches[0].size
-    
-    # Tạo ảnh mới với kích thước: chiều rộng = 6 * patch_width, chiều cao = 6 * patch_height
-    combined_width = patch_width * 6
-    combined_height = patch_height * 6
+
+    # Tạo ảnh mới kích thước: (root * patch_width) x (root * patch_height)
+    combined_width = patch_width * root
+    combined_height = patch_height * root
     combined_image = Image.new("RGB", (combined_width, combined_height))
-    
-    # Dán từng ảnh vào vị trí tương ứng trong ảnh tổng hợp
+
+    # Dán từng ảnh vào vị trí tương ứng
     for idx, patch in enumerate(patches):
-        row = idx // 6  # hàng (0 đến 5)
-        col = idx % 6   # cột (0 đến 5)
+        row = idx // root
+        col = idx % root
         combined_image.paste(patch, (col * patch_width, row * patch_height))
-    
-    # Lấy tên folder cuối cùng của input_folder làm tên file đầu ra
+
+    # Lấy tên folder cuối của input_folder làm tên file đầu ra
     folder_name = os.path.basename(os.path.normpath(input_folder))
     output_file_path = os.path.join(output_folder, f"{folder_name}.png")
-    
+
     # Lưu ảnh tổng hợp
     combined_image.save(output_file_path)
     print(f"Đã lưu ảnh tổng hợp: {output_file_path}")
@@ -120,67 +149,111 @@ def combine_all_images(input_dataset_folder, output_folder):
         except Exception as e:
             print(f"Lỗi khi xử lý folder {subfolder}: {e}")
 
-# Tạo một tensor chứa 36 ảnh từ 36 tensor nhỏ (4 chiều)
-def combine_torch_tensors_4d(list_container):
+# Tạo một tensor chứa n^2 ảnh từ n^2 tensor nhỏ (4 chiều)
+def combine_torch_tensors_4d(list_container, num_images=None):
     """
-    Kết hợp danh sách 36 tensor, mỗi tensor có dạng (B, C, H, W), thành một tensor tổng hợp dạng lưới 6x6.
-    Output: Tensor có dạng (B, C, 6*H, 6*W).
+    Kết hợp danh sách các tensor 4D (B, C, H, W) thành một tensor 4D (B, C, newH, newW),
+    sắp xếp theo dạng lưới √num_images x √num_images.
     
-    Yêu cầu: Tất cả các tensor trong list_container phải có cùng batch size, số kênh (C), chiều cao (H) và chiều rộng (W).
+    Args:
+        list_container (List[torch.Tensor]): Danh sách các tensor 4D, mỗi tensor shape (B, C, H, W).
+        num_images (int, optional): Số lượng tensor sẽ được ghép. Mặc định = len(list_container).
+            Yêu cầu: num_images phải là số chính phương (4, 9, 16, 25, 36, ...).
+    
+    Returns:
+        torch.Tensor: Tensor 4D có shape (B, C, root*H, root*W), trong đó root = √num_images.
     """
-    if len(list_container) != 36:
-        raise ValueError("Danh sách phải chứa đúng 36 tensor.")
+    # Nếu không truyền num_images, mặc định bằng độ dài của list_container
+    if num_images is None:
+        num_images = len(list_container)
     
-    # Lấy thông tin từ tensor đầu tiên
+    # Kiểm tra xem list_container có đủ tensor
+    if len(list_container) < num_images:
+        raise ValueError(
+            f"Danh sách chỉ có {len(list_container)} tensor, "
+            f"nhưng yêu cầu ghép {num_images} tensor."
+        )
+    
+    # Kiểm tra num_images có phải là số chính phương hay không
+    root = int(math.sqrt(num_images))
+    if root * root != num_images:
+        raise ValueError(f"num_images = {num_images} không phải số chính phương (4, 9, 16, 25, 36, ...).")
+    
+    # Nếu list_container có nhiều hơn num_images, chỉ lấy đúng num_images phần tử đầu
+    list_container = list_container[:num_images]
+    
+    # Lấy shape từ tensor đầu tiên để đối chiếu
     B, C, H, W = list_container[0].shape
-    # Kiểm tra rằng tất cả các tensor đều có cùng shape
+    
+    # Kiểm tra tất cả tensor có cùng shape
     for idx, tensor in enumerate(list_container):
         if tensor.shape != (B, C, H, W):
-            raise ValueError(f"Tensor tại index {idx} có shape {tensor.shape} không khớp với tensor đầu tiên ({B, C, H, W}).")
+            raise ValueError(
+                f"Tensor tại index {idx} có shape {tensor.shape} "
+                f"không khớp với tensor đầu tiên ({B, C, H, W})."
+            )
     
+    # Ta sẽ tạo danh sách chứa các ảnh lưới của từng mẫu trong batch
     grid_list = []
-    # Với mỗi mẫu trong batch, tạo ảnh lưới 6x6
-    for b in range(B):
-        # Lấy ra ảnh con tương ứng từ mỗi tensor, mỗi ảnh có shape (C, H, W)
-        images = [tensor[b] for tensor in list_container]
-        rows = []
-        for i in range(6):
-            # Ghép 6 ảnh theo chiều width (axis=2) để tạo thành 1 hàng
-            row = torch.cat(images[i*6:(i+1)*6], dim=2)
-            rows.append(row)
-        # Ghép 6 hàng theo chiều height (axis=1) để tạo ra ảnh lưới cho mẫu thứ b
-        grid_image = torch.cat(rows, dim=1)
-        # Thêm batch dimension cho ảnh lưới
-        grid_list.append(grid_image.unsqueeze(0))
     
-    # Kết hợp lại tất cả các mẫu trong batch thành tensor 4D
-    result = torch.cat(grid_list, dim=0)  # Shape: (B, C, 6*H, 6*W)
+    # Duyệt qua từng mẫu trong batch
+    for b in range(B):
+        # Lấy ra "ảnh" thứ b từ mỗi tensor (mỗi ảnh có shape (C, H, W))
+        images = [t[b] for t in list_container]
+        
+        rows = []
+        # Tạo lần lượt từng hàng (mỗi hàng chứa root ảnh ghép ngang)
+        for i in range(root):
+            # Ghép ngang 6 ảnh (hoặc root ảnh) theo dim=2
+            row = torch.cat(images[i * root : (i + 1) * root], dim=2)
+            rows.append(row)
+        
+        # Ghép dọc các hàng theo dim=1
+        grid_image = torch.cat(rows, dim=1)  # shape (C, root*H, root*W)
+        
+        # Thêm batch dimension cho ảnh lưới rồi append vào list
+        grid_list.append(grid_image.unsqueeze(0))  # shape (1, C, root*H, root*W)
+    
+    # Ghép tất cả ảnh lưới của từng mẫu batch lại với nhau theo dim=0
+    result = torch.cat(grid_list, dim=0)  # shape (B, C, root*H, root*W)
+    
     return result
 
-# Chia một tensor lớn thành list 36 tensor nhỏ (4 chiều)
-def split_torch_tensors_4d(parent_container_grid):
+# Chia một tensor lớn thành list n^2 tensor nhỏ (4 chiều)
+def split_torch_tensors_4d(parent_container_grid, grid_size=6):
     """
-    Chia một tensor 4D (B, C, H_total, W_total) thành 36 patch nhỏ theo lưới 6x6.
+    Chia một tensor 4D (B, C, H_total, W_total) thành grid_size x grid_size patch nhỏ theo lưới.
     
     Output:
-      - Một list gồm 36 tensor, mỗi tensor có shape (B, C, patch_H, patch_W), 
-        với patch_H = H_total//6 và patch_W = W_total//6.
+      - Một list gồm grid_size * grid_size tensor, mỗi tensor có shape (B, C, patch_H, patch_W),
+        với patch_H = H_total // grid_size và patch_W = W_total // grid_size.
     
     Yêu cầu:
-      - H_total và W_total phải chia hết cho 6.
+      - H_total và W_total phải chia hết cho grid_size.
+    
+    Ví dụ:
+      - Nếu grid_size=6 (mặc định) => chia thành 36 patch (6x6).
+      - Nếu grid_size=3 => chia thành 9 patch (3x3).
+      - Nếu grid_size=2 => chia thành 4 patch (2x2).
     """
     B, C, H_total, W_total = parent_container_grid.shape
-    patch_H = H_total // 6
-    patch_W = W_total // 6
+
+    # Kiểm tra H_total và W_total có chia hết cho grid_size không
+    if H_total % grid_size != 0 or W_total % grid_size != 0:
+        raise ValueError(f"H_total ({H_total}) và W_total ({W_total}) phải chia hết cho grid_size {grid_size}.")
+
+    patch_H = H_total // grid_size
+    patch_W = W_total // grid_size
     patches = []
-    
-    for i in range(6):      # Duyệt qua 6 hàng
-        for j in range(6):  # Duyệt qua 6 cột
+
+    # Duyệt qua từng hàng và cột của lưới
+    for i in range(grid_size):
+        for j in range(grid_size):
             patch = parent_container_grid[:, :, 
                      i * patch_H:(i + 1) * patch_H, 
                      j * patch_W:(j + 1) * patch_W]
             patches.append(patch)
-    
+
     return patches
 
 # combine_all_images("E:/Year_4/Thesis/EditGuard-Split-Image/dataset/valAGE-Set-5-eles-split-ori", "E:/Year_4/Thesis/EditGuard-Split-Image/dataset/valAGE-Set-5-eles-merge")  # Gom ảnh từ thư mục images và lưu ra output.jpg
