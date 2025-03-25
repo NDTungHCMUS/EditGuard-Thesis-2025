@@ -1,3 +1,4 @@
+IBSN.py
 import logging
 from collections import OrderedDict
 
@@ -745,9 +746,9 @@ class Model_VSN(BaseModel):
     def save(self, iter_label):
         self.save_network(self.netG, 'G', iter_label)
 
-    def embed(self):
+    def embed(self, message = "0" * 64):
         self.netG.eval()
-        messagenp = np.random.choice([-0.5, 0.5], (self.ref_L.shape[0], self.opt['message_length']))
+        messagenp = bit_string_to_messagenp(message, batch_size=1)
 
         message = torch.Tensor(messagenp).to(self.device)
         with torch.no_grad():

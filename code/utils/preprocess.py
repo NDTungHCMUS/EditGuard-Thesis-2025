@@ -1,4 +1,17 @@
 import numpy as np
+def load_copyright(file_path):
+    """
+    Đọc từng dòng của file và trả về list các dòng.
+
+    Args:
+        file_path (str): Đường dẫn đến file.
+
+    Returns:
+        List[str]: Danh sách các dòng từ file, không chứa ký tự newline.
+    """
+    with open(file_path, 'r', encoding='utf-8') as file:
+        lines = [line.rstrip('\n') for line in file]
+    return lines
 def load_pairs_from_file(file_path):
     """
     Đọc file nhị phân, mỗi cặp (copyright, metadata) sẽ được lưu vào danh sách.

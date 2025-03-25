@@ -16,8 +16,9 @@ from models import create_model
 import numpy as np
 from utils.image_handler import split_all_images, combine_images_from_folder, combine_torch_tensors_4d, split_torch_tensors_4d, save_tensor_images, write_extracted_messages
 from utils.random_walk import random_walk_unique
-from utils.preprocess import load_pairs_from_file
+from utils.preprocess import load_pairs_from_file, load_copyright
 from utils.mapping import create_list_data
+from utils.reed_solomons import compute_parity, recover_original
 
 def init_dist(backend='nccl', **kwargs):
     ''' initialization for distributed training'''
@@ -123,6 +124,10 @@ def main():
     # mapping_data = create_list_data(random_walk_squeuence, list_copyright_metadata[0][0], list_copyright_metadata[0][1])
     # print("MAPPING_DATA:", mapping_data)
     n = 2
+    list_copyright = load_copyright(opt['datasets']['TD']['copyright_path'])
+    list_parity = []
+    for i in range(len(list_copyright)):
+      list_parity.append(compute_parity(list_copyright[i]))
     for parent_image_id, val_data in enumerate(val_loader):
         # img_dir = os.path.join('results',opt['name'])
         # util.mkdir(img_dir)
@@ -131,7 +136,7 @@ def main():
         list_container = []
         list_ref_L = []
         list_real_H = []
-        list_message = []
+        list_messageTensor = []
         for i in range(0, n * n):
             child_data = {
                 'LQ': val_data['LQ'][i].unsqueeze(0),
@@ -143,8 +148,12 @@ def main():
             model.feed_data(child_data)
             list_ref_L.append(model.ref_L)
             list_real_H.append(model.real_H)
-            I_container, message = model.embed()
-            list_message.append(message)
+            if (n % 2 == 0):
+              message = list_copyright[i//2]
+            else:
+              message = list_parity[i//2]
+            I_container, messageTensor = model.embed(message)
+            list_messageTensor.append(messageTensor)
             print("MESSAGE:",message)
             list_container.append(I_container)
 
@@ -184,10 +193,11 @@ def main():
         list_fake_H_h = []
         list_forw_L = []
         list_recmessage = []
-        print("LENGTH of list message: ", len(list_message))
+        list_message = []
+        print("LENGTH of list message: ", len(list_messageTensor))
         # Step 5: Extract from 36 images
         for i in range(0, n * n):
-            fake_H, fake_H_h, forw_L, recmessage, message = model.extract(list_message[i], y_forw = list_container_rec[i], y = list_container_rec_quantize[i])
+            fake_H, fake_H_h, forw_L, recmessage, message = model.extract(list_messageTensor[i], y_forw = list_container_rec[i], y = list_container_rec_quantize[i])
             list_fake_H.append(fake_H)
             list_fake_H_h.append(fake_H_h)
             list_forw_L.append(forw_L)
