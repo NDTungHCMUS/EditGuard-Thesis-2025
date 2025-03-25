@@ -1,4 +1,3 @@
-IBSN.py
 import logging
 from collections import OrderedDict
 
