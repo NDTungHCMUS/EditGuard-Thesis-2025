@@ -16,7 +16,7 @@ from models import create_model
 import numpy as np
 from utils.image_handler import split_all_images, combine_images_from_folder, combine_torch_tensors_4d, split_torch_tensors_4d, save_tensor_images, write_extracted_messages
 from utils.random_walk import random_walk_unique
-from utils.preprocess import load_pairs_from_file, load_copyright
+from utils.preprocess import load_pairs_from_file, load_copyright, tensor_to_binary_string
 from utils.mapping import create_list_data
 from utils.reed_solomons import compute_parity, recover_original
 
@@ -123,11 +123,18 @@ def main():
     # list_copyright_metadata = load_pairs_from_file(opt['datasets']['TD']['copyright_path'])
     # mapping_data = create_list_data(random_walk_squeuence, list_copyright_metadata[0][0], list_copyright_metadata[0][1])
     # print("MAPPING_DATA:", mapping_data)
+
+
     n = 2
+    # Create copyright and corresponding parity
     list_copyright = load_copyright(opt['datasets']['TD']['copyright_path'])
     list_parity = []
     for i in range(len(list_copyright)):
       list_parity.append(compute_parity(list_copyright[i]))
+    print("LIST COPYRIGHT:", list_copyright)
+    print("LIST PARITY:", list_parity)
+
+    cnt_cannot_solve = 0
     for parent_image_id, val_data in enumerate(val_loader):
         # img_dir = os.path.join('results',opt['name'])
         # util.mkdir(img_dir)
@@ -148,7 +155,7 @@ def main():
             model.feed_data(child_data)
             list_ref_L.append(model.ref_L)
             list_real_H.append(model.real_H)
-            if (n % 2 == 0):
+            if (i % 2 == 0):
               message = list_copyright[i//2]
             else:
               message = list_parity[i//2]
@@ -158,7 +165,7 @@ def main():
             list_container.append(I_container)
 
         # Step 1.1: Save n^2 images to folder
-        save_tensor_images(list_container, parent_image_id, opt['datasets']['TD']['split_path_con'])
+        # save_tensor_images(list_container, parent_image_id, opt['datasets']['TD']['split_path_con'])
 
         # Step 2: Combine n^2 images into one (4 dimensions)
         parent_container = combine_torch_tensors_4d(list_container, num_images = n * n)
@@ -167,17 +174,17 @@ def main():
         # print("Giá trị của Parent container: ", parent_container)
 
         # Step 2.1: Save parent_container to folder
-        parent_container_img = util.tensor2img(parent_container.detach()[0].float().cpu())
-        save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id).zfill(4)}.png')
-        util.save_img(parent_container_img, save_img_path)
+        # parent_container_img = util.tensor2img(parent_container.detach()[0].float().cpu())
+        # save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id).zfill(4)}.png')
+        # util.save_img(parent_container_img, save_img_path)
 
         # Step 3: Diffusion on parent_container
         parent_y_forw, parent_y = model.diffusion(image_id = parent_image_id, y_forw = parent_container)
 
         # Step 3.1: Save parent_y_forw to folder
-        parent_rec_img = util.tensor2img(parent_y_forw)
-        save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id).zfill(4)}_diffusion.png')
-        util.save_img(parent_rec_img, save_img_path)
+        # parent_rec_img = util.tensor2img(parent_y_forw)
+        # save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id).zfill(4)}_diffusion.png')
+        # util.save_img(parent_rec_img, save_img_path)
 
         # Step 4: Split parent_rec into n^2 images
         list_container_rec = split_torch_tensors_4d(parent_y_forw, grid_size = n)
@@ -205,8 +212,37 @@ def main():
             list_message.append(message)
 
         # Step 5.1: Save all messages to file
+        for i in range(0, n * n):
+          list_message[i] = tensor_to_binary_string(list_message[i])
+          list_recmessage[i] = tensor_to_binary_string(list_recmessage[i])
         write_extracted_messages(parent_image_id, list_message, list_recmessage, opt['datasets']['TD']['copyright_output'])
-            
+
+        
+        # Step 6: Try to fix base on Reed-Solomons
+        
+        list_input_to_correct = []
+        list_recmessage_fix = []
+        # Build string to do reed-solomons
+        for i in range(0, n * n, 2):
+          list_input_to_correct.append(list_recmessage[i])
+        for i in range(1, n * n, 2):
+          list_input_to_correct[i//2] += list_recmessage[i]
+        print("LIST SOLOMON:", list_input_to_correct)
+        for i in range(0, n * n // 2):
+          a = recover_original(str(list_input_to_correct[i]))
+          print("DA CORRECT:", a)
+          if (a == -1):
+            cnt_cannot_solve += 1
+          else:
+            list_recmessage_fix.append(a[:64])
+            list_recmessage_fix.append(a[64:])
+        write_extracted_messages(parent_image_id, list_message, list_recmessage_fix, opt['datasets']['TD']['copyright_output_fix'])
+
+    print("CANNOT SOLVE:", cnt_cannot_solve)
+
+
+
+        
 
     # # validation
     # # avg_psnr = 0.0

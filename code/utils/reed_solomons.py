@@ -1,100 +1,116 @@
 from reedsolo import RSCodec, ReedSolomonError
+import random
 
-def binary_string_to_list_integer(binary_string):
-    # Đảm bảo độ dài là bội số của 8 bằng cách thêm '0' vào đầu nếu cần
-    padding = (8 - len(binary_string) % 8) % 8  # Số bit cần thêm vào đầu (nếu cần)
+def binary_string_to_list_integer_16(binary_string):
+    """
+    Chuyển đổi chuỗi nhị phân thành danh sách các số nguyên, mỗi số biểu diễn 1 symbol 16 bit.
+    Nếu chuỗi không đủ bội số của 16, thêm '0' vào đầu.
+    """
+    padding = (16 - len(binary_string) % 16) % 16
     binary_string = '0' * padding + binary_string
-
-    # Chia chuỗi thành các khối 8-bit
-    byte_list = [binary_string[i:i+8] for i in range(0, len(binary_string), 8)]
-
-    # Chuyển mỗi phần từ nhị phân sang số nguyên
-    list_integer = [int(byte, 2) for byte in byte_list]
-
+    # Chia chuỗi thành các khối 16-bit
+    symbols = [binary_string[i:i+16] for i in range(0, len(binary_string), 16)]
+    # Chuyển từng khối thành số nguyên
+    list_integer = [int(symbol, 2) for symbol in symbols]
     return list_integer
 
-def list_integer_to_binary_string(original_data):
-    binary_string = "".join(format(byte, '08b') for byte in original_data)
-
-    return binary_string
-
-def compute_parity(str):
-    original_bytes = binary_string_to_list_integer(str)
-    # Khởi tạo RSCodec với 8 ký hiệu parity trên GF(2^8)
-    rs = RSCodec(nsym=8, c_exp=8)
-    # Mã hóa: tổng codeword gồm 8 byte data và 8 byte parity (16 byte)
-    encoded = rs.encode(original_bytes)
-    # Lấy phần parity (8 byte sau dữ liệu gốc)
-    parity = encoded[len(original_bytes):]
-    return list_integer_to_binary_string(parity)
-
-
-def recover_original(str):
+def list_integer_to_binary_string_16(data):
     """
-    Khôi phục dữ liệu gốc từ codeword 128-bit (16 byte) đã bị lỗi.
+    Chuyển danh sách số nguyên (mỗi số biểu diễn 1 symbol 16 bit) thành chuỗi nhị phân.
+    """
+    return "".join(format(x, '016b') for x in data)
+
+def compute_parity(data_bit_str):
+    """
+    Tính toán parity cho dữ liệu gốc 64 bit (4 symbol 16-bit) sử dụng RSCodec với 4 ký hiệu parity.
     
     Args:
-        corrupted_codeword (bytes): Codeword bị nhiễu lỗi (16 byte) với tối đa 4 lỗi ký hiệu.
+        data_bit_str (str): Chuỗi 64 bit của dữ liệu gốc.
         
     Returns:
-        original_bytes (bytes): Dãy dữ liệu gốc khôi phục được (8 byte).
-        
-    Nếu quá trình giải mã thất bại, hàm sẽ ném ra ReedSolomonError.
-    
-    Ví dụ:
-        original = bytes([...])  # 8 byte
-        parity = compute_parity(original)
-        full_codeword = original + parity  # 16 byte
-        # Giả sử ta đảo 4 bit ngẫu nhiên trên full_codeword:
-        corrupted = bytearray(full_codeword)
-        # ... (chèn lỗi vào corrupted) ...
-        recovered = recover_original(bytes(corrupted))
+        str: Chuỗi 64 bit của phần parity (4 symbol 16-bit).
     """
-    corrupted_codeword = binary_string_to_list_integer(str)
-    rs = RSCodec(nsym=8, c_exp=8)
-    try:
-        # rs.decode trả về tuple (decoded_message, full_codeword)
-        decoded_tuple = rs.decode(corrupted_codeword)
-        original_bytes = decoded_tuple[0]
-    except ReedSolomonError as e:
-        raise ReedSolomonError("Không khôi phục được dữ liệu gốc: " + str(e))
+    if len(data_bit_str) != 64:
+        raise ValueError("Dữ liệu gốc phải là 64 bit.")
+    original_symbols = binary_string_to_list_integer_16(data_bit_str)  # 4 symbol
+    if len(original_symbols) != 4:
+        raise ValueError("Dữ liệu gốc phải được biểu diễn bởi 4 symbol (64 bit).")
+    # RSCodec với 4 ký hiệu parity (mỗi ký hiệu 16 bit)
+    rs = RSCodec(nsym=4, c_exp=16)
+    # Mã hóa: full codeword gồm 4 symbol dữ liệu + 4 symbol parity = 8 symbol
+    encoded = rs.encode(original_symbols)
+    # Lấy phần parity (4 symbol sau dữ liệu gốc)
+    parity = encoded[len(original_symbols):]
+    return list_integer_to_binary_string_16(parity)
+
+def recover_original(corrupted_bit_str):
+    """
+    Khôi phục codeword 128 bit (8 symbol, mỗi symbol 16 bit) đã bị lỗi sử dụng RSCodec với 4 ký hiệu parity.
     
-    return list_integer_to_binary_string(original_bytes)
+    Args:
+        corrupted_bit_str (str): Chuỗi 128 bit (codeword bị nhiễu lỗi).
+        
+    Returns:
+        str: Chuỗi 128 bit của codeword đã được sửa chữa.
+        
+    Nếu giải mã thất bại, ném ReedSolomonError.
+    """
+    if len(corrupted_bit_str) != 128:
+        raise ValueError("Codeword phải là 128 bit.")
+    corrupted_symbols = binary_string_to_list_integer_16(corrupted_bit_str)  # 8 symbol
+    if len(corrupted_symbols) != 8:
+        raise ValueError("Codeword phải chứa 8 symbol (128 bit).")
+    rs = RSCodec(nsym=4, c_exp=16)
+    try:
+        # decode trả về 3 giá trị: (decoded_message, corrected_codeword, errata_positions)
+        decoded_message, corrected_codeword, _ = rs.decode(corrupted_symbols)
+    except ReedSolomonError as e:
+        raise ReedSolomonError("Không khôi phục được codeword: " + str(e))
+    return list_integer_to_binary_string_16(corrected_codeword)
 
 
 # ===========================
-# Ví dụ minh họa sử dụng các hàm trên:
+# Ví dụ minh họa:
 if __name__ == '__main__':
-    import random
-    # Sinh dữ liệu gốc 8 byte (64 bit)
-    original_data = binary_string_to_list_integer("1010110001100110111101101001011010101100110011011110110100101101")
-    original_bytes = bytes(original_data)
-    print("Original bytes: ", " ".join(f"{b:02X}" for b in original_bytes))
+    # Dữ liệu gốc 64 bit (4 symbol 16-bit)
+    original_data = "1010110001100110111101101001011010101100110011011110110100101101"
+    print("Original data (64-bit):")
+    print(original_data)
     
-    # Tính parity từ dữ liệu gốc
-    parity = compute_parity(original_bytes)
-    # print("Parity bytes: ", " ".join(f"{b:02X}" for b in parity))
-    print("Parity binary: ", list_integer_to_binary_string(parity))
+    # Tính parity (sẽ trả về 64 bit, 4 symbol)
+    parity = compute_parity(original_data)
+    print("\nComputed parity (64-bit):")
+    print(parity)
     
-    # Tạo full codeword (16 byte)
-    full_codeword = original_bytes + parity
-    print("Full codeword: ", " ".join(f"{b:02X}" for b in full_codeword))
+    # Ghép lại thành full codeword 128 bit (8 symbol)
+    full_codeword = original_data + parity
+    print("\nFull codeword (128-bit):")
+    print(full_codeword)
     
-    # Giả lập lỗi: đảo tổng cộng 4 bit ngẫu nhiên trên full codeword
-    corrupted = bytearray(full_codeword)
-    error_positions = random.sample(range(len(corrupted)), 4)
-    print("Error positions: ", error_positions)
-    for pos in error_positions:
-        # Đảo 1 bit ngẫu nhiên trong byte tại vị trí pos
-        bit_to_flip = 1 << random.randint(0, 7)
-        corrupted[pos] ^= bit_to_flip
+    # Tách codeword thành 8 symbol (mỗi symbol 16-bit)
+    # symbols = [full_codeword[i:i+16] for i in range(0, 128, 16)]
+    # print("\nOriginal symbols:")
+    # for idx, sym in enumerate(symbols):
+    #     print(f"Symbol {idx}: {sym}")
     
-    print("Corrupted codeword: ", " ".join(f"{b:02X}" for b in corrupted))
+    # # Giả lập lỗi: chèn lỗi vào 2 symbol bằng cách đảo 1 bit ngẫu nhiên trong mỗi symbol
+    # error_indices = random.sample(range(8), 2)
+    # print("\nError indices (symbol indices):", error_indices)
+    # corrupted_symbols = symbols.copy()
+    # for idx in error_indices:
+    #     block = list(corrupted_symbols[idx])  # danh sách ký tự của symbol (16 bit)
+    #     bit_to_flip = random.randint(0, 15)
+    #     block[bit_to_flip] = '1' if block[bit_to_flip] == '0' else '0'
+    #     corrupted_symbols[idx] = "".join(block)
+    # corrupted_codeword = "".join(corrupted_symbols)
+    # print("\nCorrupted full codeword (128-bit):")
+    # print(corrupted_codeword)
     
-    # Khôi phục dữ liệu gốc từ codeword đã bị lỗi
+    # Khôi phục codeword đã bị lỗi
     try:
-        recovered = recover_original(bytes(corrupted))
-        print("Recovered bytes: ", " ".join(f"{b:02X}" for b in recovered))
-        print("Recovery successful:", recovered == original_bytes)
+        recovered_codeword = recover_original("10101100011001101111011010010110101011001100110111101101001011010001000101010100101110010000110000111100000111101000011101110110")
+        print("\nRecovered full codeword (128-bit):")
+        print(recovered_codeword)
+        # print("\nRecovery successful:", recovered_codeword == full_codeword)
     except ReedSolomonError as e:
         print("Recovery failed:", e)
