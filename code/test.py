@@ -3,7 +3,8 @@ import math
 import argparse
 import random
 import logging
-
+import copy
+from configs import config, args
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
@@ -55,23 +56,14 @@ def get_min_avg_and_indices(nums):
 
 
 def main():
-    # options
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-opt', type=str, help='Path to option YMAL file.')
-    parser.add_argument('--launcher', choices=['none', 'pytorch'], default='none',
-                        help='job launcher')
-    parser.add_argument('--ckpt', type=str, default='/userhome/NewIBSN/EditGuard_open/checkpoints/clean.pth', help='Path to pre-trained model.')
-    parser.add_argument('--local_rank', type=int, default=0)
-    args = parser.parse_args()
-    opt = option.parse(args.opt, is_train=True)
+    # Take opt from config 
+    opt = copy.deepcopy(config)
 
     # distributed training settings
     if args.launcher == 'none':  # disabled distributed training
-        opt['dist'] = False
         rank = -1
         print('Disabled distributed training.')
     else:
-        opt['dist'] = True
         init_dist()
         world_size = torch.distributed.get_world_size()
         rank = torch.distributed.get_rank()
@@ -95,150 +87,150 @@ def main():
     # Step 1: Split images into 36 sub-images (comment if already done)
     # split_all_images(input_folder = opt['datasets']['TD']['data_path'], output_folder = opt['datasets']['TD']['split_path_ori'], grid_size = 2)
 
-    ## create train and val dataloader
-    dataset_ratio = 200  # enlarge the size of each epoch
-    for phase, dataset_opt in opt['datasets'].items():
-        print("phase", phase)
-        if phase == 'TD':
-            val_set = create_dataset(dataset_opt)
-            val_loader = create_dataloader(val_set, dataset_opt, opt, None)
-        elif phase == 'val':
-            val_set = create_dataset(dataset_opt)
-            val_loader = create_dataloader(val_set, dataset_opt, opt, None)
-        else:
-            raise NotImplementedError('Phase [{:s}] is not recognized.'.format(phase))
+    # ## create train and val dataloader
+    # dataset_ratio = 200  # enlarge the size of each epoch
+    # for phase, dataset_opt in opt['datasets'].items():
+    #     print("phase", phase)
+    #     if phase == 'TD':
+    #         val_set = create_dataset(dataset_opt)
+    #         val_loader = create_dataloader(val_set, dataset_opt, opt, None)
+    #     elif phase == 'val':
+    #         val_set = create_dataset(dataset_opt)
+    #         val_loader = create_dataloader(val_set, dataset_opt, opt, None)
+    #     else:
+    #         raise NotImplementedError('Phase [{:s}] is not recognized.'.format(phase))
     # # for i, batch in enumerate(val_loader):
     # #     print(i)
     # #     print("SHAPE OF a batch:", batch['LQ'].shape)
 
-    # # # create model
-    model = create_model(opt)
-    model.load_test(args.ckpt)
+    # # # # create model
+    # model = create_model(opt)
+    # model.load_test(args.ckpt)
       
-    # # Create Random Walk
-    # random_walk_squeuence = random_walk_unique()
-    # print("RANDOM WALK:", random_walk_squeuence)
+    # # # Create Random Walk
+    # # random_walk_squeuence = random_walk_unique()
+    # # print("RANDOM WALK:", random_walk_squeuence)
 
-    # # Load copyright and metadata from files
-    # list_copyright_metadata = load_pairs_from_file(opt['datasets']['TD']['copyright_path'])
-    # mapping_data = create_list_data(random_walk_squeuence, list_copyright_metadata[0][0], list_copyright_metadata[0][1])
-    # print("MAPPING_DATA:", mapping_data)
+    # # # Load copyright and metadata from files
+    # # list_copyright_metadata = load_pairs_from_file(opt['datasets']['TD']['copyright_path'])
+    # # mapping_data = create_list_data(random_walk_squeuence, list_copyright_metadata[0][0], list_copyright_metadata[0][1])
+    # # print("MAPPING_DATA:", mapping_data)
 
 
-    n = 2
-    # Create copyright and corresponding parity
-    list_copyright = load_copyright(opt['datasets']['TD']['copyright_path'])
-    list_parity = []
-    for i in range(len(list_copyright)):
-      list_parity.append(compute_parity(list_copyright[i]))
-    print("LIST COPYRIGHT:", list_copyright)
-    print("LIST PARITY:", list_parity)
+    # n = 2
+    # # Create copyright and corresponding parity
+    # list_copyright = load_copyright(opt['datasets']['TD']['copyright_path'])
+    # list_parity = []
+    # for i in range(len(list_copyright)):
+    #   list_parity.append(compute_parity(list_copyright[i]))
+    # print("LIST COPYRIGHT:", list_copyright)
+    # print("LIST PARITY:", list_parity)
 
-    cnt_cannot_solve = 0
-    for parent_image_id, val_data in enumerate(val_loader):
-        # img_dir = os.path.join('results',opt['name'])
-        # util.mkdir(img_dir)
+    # cnt_cannot_solve = 0
+    # for parent_image_id, val_data in enumerate(val_loader):
+    #     # img_dir = os.path.join('results',opt['name'])
+    #     # util.mkdir(img_dir)
 
-        # Step 1: Embed data into images
-        list_container = []
-        list_ref_L = []
-        list_real_H = []
-        list_messageTensor = []
-        for i in range(0, n * n):
-            child_data = {
-                'LQ': val_data['LQ'][i].unsqueeze(0),
-                'GT': val_data['GT'][i].unsqueeze(0)
-            }
-            # print("Child Data of parent: {parent_image_id}, child: {i} is:", child_data)
-            # print("Shape LQ of Child Data:", child_data['LQ'].shape)
-            # print("Shape GT of Child Data:", child_data['GT'].shape)
-            model.feed_data(child_data)
-            list_ref_L.append(model.ref_L)
-            list_real_H.append(model.real_H)
-            if (i % 2 == 0):
-              message = list_copyright[i//2]
-            else:
-              message = list_parity[i//2]
-            I_container, messageTensor = model.embed(message)
-            list_messageTensor.append(messageTensor)
-            print("MESSAGE:",message)
-            list_container.append(I_container)
+    #     # Step 1: Embed data into images
+    #     list_container = []
+    #     list_ref_L = []
+    #     list_real_H = []
+    #     list_messageTensor = []
+    #     for i in range(0, n * n):
+    #         child_data = {
+    #             'LQ': val_data['LQ'][i].unsqueeze(0),
+    #             'GT': val_data['GT'][i].unsqueeze(0)
+    #         }
+    #         # print("Child Data of parent: {parent_image_id}, child: {i} is:", child_data)
+    #         # print("Shape LQ of Child Data:", child_data['LQ'].shape)
+    #         # print("Shape GT of Child Data:", child_data['GT'].shape)
+    #         model.feed_data(child_data)
+    #         list_ref_L.append(model.ref_L)
+    #         list_real_H.append(model.real_H)
+    #         if (i % 2 == 0):
+    #           message = list_copyright[i//2]
+    #         else:
+    #           message = list_parity[i//2]
+    #         I_container, messageTensor = model.embed(message)
+    #         list_messageTensor.append(messageTensor)
+    #         print("MESSAGE:",message)
+    #         list_container.append(I_container)
 
-        # Step 1.1: Save n^2 images to folder
-        # save_tensor_images(list_container, parent_image_id, opt['datasets']['TD']['split_path_con'])
+    #     # Step 1.1: Save n^2 images to folder
+    #     # save_tensor_images(list_container, parent_image_id, opt['datasets']['TD']['split_path_con'])
 
-        # Step 2: Combine n^2 images into one (4 dimensions)
-        parent_container = combine_torch_tensors_4d(list_container, num_images = n * n)
-        # parent_container = torch.nn.functional.interpolate(parent_container, size=(512, 512), mode='nearest', align_corners=None)
-        # print("Shape của parent container: ", parent_container.shape)
-        # print("Giá trị của Parent container: ", parent_container)
+    #     # Step 2: Combine n^2 images into one (4 dimensions)
+    #     parent_container = combine_torch_tensors_4d(list_container, num_images = n * n)
+    #     # parent_container = torch.nn.functional.interpolate(parent_container, size=(512, 512), mode='nearest', align_corners=None)
+    #     # print("Shape của parent container: ", parent_container.shape)
+    #     # print("Giá trị của Parent container: ", parent_container)
 
-        # Step 2.1: Save parent_container to folder
-        # parent_container_img = util.tensor2img(parent_container.detach()[0].float().cpu())
-        # save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id).zfill(4)}.png')
-        # util.save_img(parent_container_img, save_img_path)
+    #     # Step 2.1: Save parent_container to folder
+    #     # parent_container_img = util.tensor2img(parent_container.detach()[0].float().cpu())
+    #     # save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id).zfill(4)}.png')
+    #     # util.save_img(parent_container_img, save_img_path)
 
-        # Step 3: Diffusion on parent_container
-        parent_y_forw, parent_y = model.diffusion(image_id = parent_image_id, y_forw = parent_container)
+    #     # Step 3: Diffusion on parent_container
+    #     parent_y_forw, parent_y = model.diffusion(image_id = parent_image_id, y_forw = parent_container)
 
-        # Step 3.1: Save parent_y_forw to folder
-        # parent_rec_img = util.tensor2img(parent_y_forw)
-        # save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id).zfill(4)}_diffusion.png')
-        # util.save_img(parent_rec_img, save_img_path)
+    #     # Step 3.1: Save parent_y_forw to folder
+    #     # parent_rec_img = util.tensor2img(parent_y_forw)
+    #     # save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id).zfill(4)}_diffusion.png')
+    #     # util.save_img(parent_rec_img, save_img_path)
 
-        # Step 4: Split parent_rec into n^2 images
-        list_container_rec = split_torch_tensors_4d(parent_y_forw, grid_size = n)
-        list_container_rec_quantize = split_torch_tensors_4d(parent_y, grid_size = n)
+    #     # Step 4: Split parent_rec into n^2 images
+    #     list_container_rec = split_torch_tensors_4d(parent_y_forw, grid_size = n)
+    #     list_container_rec_quantize = split_torch_tensors_4d(parent_y, grid_size = n)
         
-        # Step 4.1: Save n^2 images to folder
-        save_tensor_images(list_container_rec, parent_image_id, opt['datasets']['TD']['split_path_rec'])
-        # print("Shape of list_container_rec[0]:", list_container_rec[0].shape)
-        # for i in range(len(list_container_rec)):
-        #     print(f"List_container_rec {i}", list_container_rec[i])
+    #     # Step 4.1: Save n^2 images to folder
+    #     save_tensor_images(list_container_rec, parent_image_id, opt['datasets']['TD']['split_path_rec'])
+    #     # print("Shape of list_container_rec[0]:", list_container_rec[0].shape)
+    #     # for i in range(len(list_container_rec)):
+    #     #     print(f"List_container_rec {i}", list_container_rec[i])
             
-        list_fake_H = []
-        list_fake_H_h = []
-        list_forw_L = []
-        list_recmessage = []
-        list_message = []
-        print("LENGTH of list message: ", len(list_messageTensor))
-        # Step 5: Extract from 36 images
-        for i in range(0, n * n):
-            fake_H, fake_H_h, forw_L, recmessage, message = model.extract(list_messageTensor[i], y_forw = list_container_rec[i], y = list_container_rec_quantize[i])
-            list_fake_H.append(fake_H)
-            list_fake_H_h.append(fake_H_h)
-            list_forw_L.append(forw_L)
-            list_recmessage.append(recmessage)
-            list_message.append(message)
+    #     list_fake_H = []
+    #     list_fake_H_h = []
+    #     list_forw_L = []
+    #     list_recmessage = []
+    #     list_message = []
+    #     print("LENGTH of list message: ", len(list_messageTensor))
+    #     # Step 5: Extract from 36 images
+    #     for i in range(0, n * n):
+    #         fake_H, fake_H_h, forw_L, recmessage, message = model.extract(list_messageTensor[i], y_forw = list_container_rec[i], y = list_container_rec_quantize[i])
+    #         list_fake_H.append(fake_H)
+    #         list_fake_H_h.append(fake_H_h)
+    #         list_forw_L.append(forw_L)
+    #         list_recmessage.append(recmessage)
+    #         list_message.append(message)
 
-        # Step 5.1: Save all messages to file
-        for i in range(0, n * n):
-          list_message[i] = tensor_to_binary_string(list_message[i])
-          list_recmessage[i] = tensor_to_binary_string(list_recmessage[i])
-        write_extracted_messages(parent_image_id, list_message, list_recmessage, opt['datasets']['TD']['copyright_output'])
+    #     # Step 5.1: Save all messages to file
+    #     for i in range(0, n * n):
+    #       list_message[i] = tensor_to_binary_string(list_message[i])
+    #       list_recmessage[i] = tensor_to_binary_string(list_recmessage[i])
+    #     write_extracted_messages(parent_image_id, list_message, list_recmessage, opt['datasets']['TD']['copyright_output'])
 
         
-        # Step 6: Try to fix base on Reed-Solomons
+    #     # Step 6: Try to fix base on Reed-Solomons
         
-        list_input_to_correct = []
-        list_recmessage_fix = []
-        # Build string to do reed-solomons
-        for i in range(0, n * n, 2):
-          list_input_to_correct.append(list_recmessage[i])
-        for i in range(1, n * n, 2):
-          list_input_to_correct[i//2] += list_recmessage[i]
-        print("LIST SOLOMON:", list_input_to_correct)
-        for i in range(0, n * n // 2):
-          a = recover_original(str(list_input_to_correct[i]))
-          print("DA CORRECT:", a)
-          if (a == -1):
-            cnt_cannot_solve += 1
-          else:
-            list_recmessage_fix.append(a[:64])
-            list_recmessage_fix.append(a[64:])
-        write_extracted_messages(parent_image_id, list_message, list_recmessage_fix, opt['datasets']['TD']['copyright_output_fix'])
+    #     list_input_to_correct = []
+    #     list_recmessage_fix = []
+    #     # Build string to do reed-solomons
+    #     for i in range(0, n * n, 2):
+    #       list_input_to_correct.append(list_recmessage[i])
+    #     for i in range(1, n * n, 2):
+    #       list_input_to_correct[i//2] += list_recmessage[i]
+    #     print("LIST SOLOMON:", list_input_to_correct)
+    #     for i in range(0, n * n // 2):
+    #       a = recover_original(str(list_input_to_correct[i]))
+    #       print("DA CORRECT:", a)
+    #       if (a == -1):
+    #         cnt_cannot_solve += 1
+    #       else:
+    #         list_recmessage_fix.append(a[:64])
+    #         list_recmessage_fix.append(a[64:])
+    #     write_extracted_messages(parent_image_id, list_message, list_recmessage_fix, opt['datasets']['TD']['copyright_output_fix'])
 
-    print("CANNOT SOLVE:", cnt_cannot_solve)
+    # print("CANNOT SOLVE:", cnt_cannot_solve)
 
 
 

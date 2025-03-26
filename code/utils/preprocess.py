@@ -1,4 +1,5 @@
 import numpy as np
+
 def load_copyright(file_path):
     """
     Đọc từng dòng của file và trả về list các dòng.
@@ -60,3 +61,19 @@ def bit_string_to_messagenp(bit_string, batch_size=1):
     if batch_size > 1:
         message = np.tile(message, (batch_size, 1))
     return message
+
+def tensor_to_binary_string(tensor):
+    """
+    Chuyển đổi tensor chứa các giá trị 0.0 hoặc 1.0 thành chuỗi nhị phân.
+    
+    Args:
+        tensor (torch.Tensor): Tensor với các giá trị 0 hoặc 1, có bất kỳ hình dạng nào.
+    
+    Returns:
+        str: Chuỗi gồm các chữ số '0' và '1', ví dụ "1000011...".
+    """
+    # Đưa tensor về CPU nếu cần và làm phẳng thành vector 1 chiều
+    flat = tensor.cpu().view(-1)
+    # Chuyển từng giá trị sang int và tạo chuỗi nhị phân
+    binary_string = ''.join(str(int(round(val.item()))) for val in flat)
+    return binary_string
