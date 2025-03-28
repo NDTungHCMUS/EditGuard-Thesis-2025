@@ -6,7 +6,9 @@ import numpy as np
 import math
 from .util import save_img, tensor2img, decoded_message_error_rate
 
-def split_and_save_image_torch(image_path, output_folder="images", grid_size=6):
+# --- VN Start -----
+## Explaination: Split parent images into child images
+def split_and_save_image_torch(image_path, output_folder="images", num_child_images = 4):
     """
     Chia ảnh thành grid_size x grid_size phần bằng nhau và lưu vào thư mục output_folder.
     
@@ -22,6 +24,7 @@ def split_and_save_image_torch(image_path, output_folder="images", grid_size=6):
     img = Image.open(image_path).convert("RGB")
     # Chuyển ảnh thành tensor có shape (C, H, W)
     img_tensor = TF.to_tensor(img)
+    grid_size = int(math.sqrt(num_child_images))
     
     C, H, W = img_tensor.shape
     if H % grid_size != 0 or W % grid_size != 0:
@@ -42,7 +45,7 @@ def split_and_save_image_torch(image_path, output_folder="images", grid_size=6):
 
     print(f"Đã lưu {count} ảnh vào thư mục {output_folder}")
 
-def split_all_images(input_folder="A", output_folder="B"):
+def split_all_images(input_folder="A", output_folder="B", num_child_images = 4):
     """
     Duyệt qua tất cả các ảnh trong thư mục input_folder, chia nhỏ và lưu vào output_folder.
 
@@ -59,7 +62,7 @@ def split_all_images(input_folder="A", output_folder="B"):
             save_dir = os.path.join(output_folder, img_name)  # Tạo thư mục riêng cho ảnh
             os.makedirs(save_dir, exist_ok=True)
 
-            split_and_save_image_torch(img_path, save_dir)
+            split_and_save_image_torch(img_path, save_dir, num_child_images = num_child_images)
 
 # split_and_save_image_torch("input.jpg") 
 

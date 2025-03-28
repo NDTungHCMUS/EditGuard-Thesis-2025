@@ -18,21 +18,23 @@ class imageTestDataset(data.Dataset):
         self.bit_path = opt['bit_path']
         self.txt_path = self.opt['txt_path']
         self.data_split_path = opt['split_path_ori']
-        self.num_image = self.opt['num_image']
+        self.num_child_images = self.opt['num_child_images']
         with open(self.txt_path) as f:
             self.list_image = f.readlines()
         self.list_image = [line.strip('\n') for line in self.list_image]
-        # self.list_image = sorted(self.list_image)
-        l = len(self.list_image) // (self.num_image + 1)
+        l = len(self.list_image) // (self.num_child_images + 1)
         self.image_list_gt = self.list_image
         self.image_list_bit = self.list_image
 
 
     def __getitem__(self, index):
-        parent_index = index // self.num_image
-        index = index % self.num_image
+        # ----- VN Start -----
+        ## Explaination: Calculate index for the child images
+        parent_index = index // self.num_child_images
+        index = index % self.num_child_images
         parent_path_GT = osp.join(self.data_split_path, self.image_list_gt[parent_index])
-        
+        # ----- VN End -----
+
         img_GT = util.read_img(None, osp.join(parent_path_GT, f"{index}.png"))
         img_GT = img_GT[:, :, [2, 1, 0]]
         img_GT = torch.from_numpy(np.ascontiguousarray(np.transpose(img_GT, (2, 0, 1)))).float().unsqueeze(0)
@@ -63,4 +65,6 @@ class imageTestDataset(data.Dataset):
             }
     
     def __len__(self):
-        return len(self.image_list_gt * self.num_image)  
+        # ----- VN Start -----
+        return len(self.image_list_gt * self.num_child_images)  
+        # ----- VN End -----

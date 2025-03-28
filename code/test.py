@@ -16,7 +16,7 @@ from models import create_model
 import numpy as np
 from utils.image_handler import split_all_images, combine_images_from_folder, combine_torch_tensors_4d, split_torch_tensors_4d, save_tensor_images, write_extracted_messages
 from utils.random_walk import random_walk_unique
-from utils.preprocess import load_pairs_from_file, load_copyright, tensor_to_binary_string
+from utils.preprocess import load_pairs_from_file, load_copyright_metadata_from_files, tensor_to_binary_string, compute_parity_from_list_copyright_metadata
 from utils.mapping import create_list_data
 from utils.reed_solomons import compute_parity, recover_original
 
@@ -55,7 +55,7 @@ def get_min_avg_and_indices(nums):
 
 
 def main():
-    # options
+    # Options
     parser = argparse.ArgumentParser()
     parser.add_argument('-opt', type=str, help='Path to option YMAL file.')
     parser.add_argument('--launcher', choices=['none', 'pytorch'], default='none',
@@ -65,8 +65,8 @@ def main():
     args = parser.parse_args()
     opt = option.parse(args.opt, is_train=True)
 
-    # distributed training settings
-    if args.launcher == 'none':  # disabled distributed training
+    # Distributed training settings
+    if args.launcher == 'none':  # Disabled distributed training
         opt['dist'] = False
         rank = -1
         print('Disabled distributed training.')
@@ -76,7 +76,7 @@ def main():
         world_size = torch.distributed.get_world_size()
         rank = torch.distributed.get_rank()
 
-    # loading resume state if exists
+    # Loading resume state if exists
     if opt['path'].get('resume_state', None):
         # distributed resuming: all load into default GPU
         device_id = torch.cuda.current_device()
@@ -86,32 +86,31 @@ def main():
     else:
         resume_state = None
 
-    # convert to NoneDict, which returns None for missing keys
+    # Convert to NoneDict, which returns None for missing keys
     opt = option.dict_to_nonedict(opt)
 
     torch.backends.cudnn.benchmark = True
     # torch.backends.cudnn.deterministic = True
 
-    # Step 1: Split images into n^2 sub-images (comment if already done)
-    split_all_images(input_folder = opt['datasets']['TD']['data_path'], output_folder = opt['datasets']['TD']['split_path_ori'], grid_size = 2)
+    # ----- VN Start -----
+    ## Explaination: Split images into n^2 sub-images (comment if already done)
+    split_all_images(input_folder = opt['datasets']['TD']['data_path'], output_folder = opt['datasets']['TD']['split_path_ori'], num_child_images = opt['datasets']['TD']['num_child_images'])
+    # ----- VN End -----
 
-    # ## create train and val dataloader
-    # dataset_ratio = 200  # enlarge the size of each epoch
-    # for phase, dataset_opt in opt['datasets'].items():
-    #     print("phase", phase)
-    #     if phase == 'TD':
-    #         val_set = create_dataset(dataset_opt)
-    #         val_loader = create_dataloader(val_set, dataset_opt, opt, None)
-    #     elif phase == 'val':
-    #         val_set = create_dataset(dataset_opt)
-    #         val_loader = create_dataloader(val_set, dataset_opt, opt, None)
-    #     else:
-    #         raise NotImplementedError('Phase [{:s}] is not recognized.'.format(phase))
-    # # for i, batch in enumerate(val_loader):
-    # #     print(i)
-    # #     print("SHAPE OF a batch:", batch['LQ'].shape)
 
-    # # # # create model
+    # Create train and val dataloader
+    dataset_ratio = 200  # Enlarge the size of each epoch
+    for phase, dataset_opt in opt['datasets'].items():
+        if phase == 'TD':
+            val_set = create_dataset(dataset_opt)
+            val_loader = create_dataloader(val_set, dataset_opt, opt, None)
+        elif phase == 'val':
+            val_set = create_dataset(dataset_opt)
+            val_loader = create_dataloader(val_set, dataset_opt, opt, None)
+        else:
+            raise NotImplementedError('Phase [{:s}] is not recognized.'.format(phase))
+
+    # Create model
     # model = create_model(opt)
     # model.load_test(args.ckpt)
       
@@ -124,16 +123,12 @@ def main():
     # # mapping_data = create_list_data(random_walk_squeuence, list_copyright_metadata[0][0], list_copyright_metadata[0][1])
     # # print("MAPPING_DATA:", mapping_data)
 
-
-    # n = 2
-    # # Create copyright and corresponding parity
-    # list_copyright = load_copyright(opt['datasets']['TD']['copyright_path'])
-    # list_parity = []
-    # for i in range(len(list_copyright)):
-    #   list_parity.append(compute_parity(list_copyright[i]))
-    # print("LIST COPYRIGHT:", list_copyright)
-    # print("LIST PARITY:", list_parity)
-
+    # ---- VN Start -----
+    ## Explaination: Create copyright, metadata and corresponding parity
+    list_copyright_metadata = load_copyright_metadata_from_files(opt['datasets']['TD']['copyright_path'])
+    list_parity_copyright_metadata = compute_parity_from_list_copyright_metadata(list_copyright_metadata)
+    # ---- VN End -----
+    
     # cnt_cannot_solve = 0
     # for parent_image_id, val_data in enumerate(val_loader):
     #     # img_dir = os.path.join('results',opt['name'])

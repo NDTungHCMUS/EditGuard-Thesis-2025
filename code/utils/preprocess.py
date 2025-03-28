@@ -1,18 +1,56 @@
 import numpy as np
+from .reed_solomons import compute_parity
 
-def load_copyright(file_path):
-    """
-    Đọc từng dòng của file và trả về list các dòng.
+def load_copyright_metadata_from_files(file_path):
+    results = []
+    with open(file_path, 'r') as file:
+        lines = file.read().splitlines()  # reads lines without newline characters
+    
+    i = 0
+    while i < len(lines):
+        # The first line of a block is the image number (e.g. "0001"). Skip it.
+        if len(lines[i]) == 4 and lines[i].isdigit():
+            i += 1
+        else:
+            # If the expected image number is not found, you may handle the error as needed.
+            raise ValueError(f"Expected an image number at line {i+1}, got: {lines[i]}")
+        
+        # Check if there is at least one 64-bit string for this image.
+        if i >= len(lines):
+            break
+        
+        # The first 64-bit string is considered as copyright.
+        current_copyright = lines[i]
+        i += 1
+        current_metadata = []
+        
+        # All subsequent lines until the next image number or end of file are metadata.
+        while i < len(lines):
+            if len(lines[i]) == 4 and lines[i].isdigit():
+                break
+            current_metadata.append(lines[i])
+            i += 1
+        
+        results.append({
+            "copyright": current_copyright,
+            "metadata": current_metadata
+        })
+    
+    return results
 
-    Args:
-        file_path (str): Đường dẫn đến file.
+def compute_parity_from_list_copyright_metadata(list_copyright_metadata):
+    result = []
+    for i in range(len(list_copyright_metadata)):
+        parity_data = {
+            "copyright": compute_parity(list_copyright_metadata[i]["copyright"]),
+            "metadata": []
+        }
+        for metadata in list_copyright_metadata[i]["metadata"]:
+            parity_metadata = compute_parity(metadata)
+            parity_data["metadata"].append(parity_metadata)
+        result.append(parity_data)
+    return result
 
-    Returns:
-        List[str]: Danh sách các dòng từ file, không chứa ký tự newline.
-    """
-    with open(file_path, 'r', encoding='utf-8') as file:
-        lines = [line.rstrip('\n') for line in file]
-    return lines
 def load_pairs_from_file(file_path):
     """
     Đọc file nhị phân, mỗi cặp (copyright, metadata) sẽ được lưu vào danh sách.
