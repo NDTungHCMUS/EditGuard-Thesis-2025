@@ -63,4 +63,4 @@ class imageTestDataset(data.Dataset):
             }
     
     def __len__(self):
-        return len(self.image_list_gt * 4)  
+        return len(self.image_list_gt * self.num_image)  

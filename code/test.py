@@ -4,7 +4,6 @@ import argparse
 import random
 import logging
 import copy
-from configs import config, args
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
@@ -56,14 +55,23 @@ def get_min_avg_and_indices(nums):
 
 
 def main():
-    # Take opt from config 
-    opt = copy.deepcopy(config)
+    # options
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-opt', type=str, help='Path to option YMAL file.')
+    parser.add_argument('--launcher', choices=['none', 'pytorch'], default='none',
+                        help='job launcher')
+    parser.add_argument('--ckpt', type=str, default='/userhome/NewIBSN/EditGuard_open/checkpoints/clean.pth', help='Path to pre-trained model.')
+    parser.add_argument('--local_rank', type=int, default=0)
+    args = parser.parse_args()
+    opt = option.parse(args.opt, is_train=True)
 
     # distributed training settings
     if args.launcher == 'none':  # disabled distributed training
+        opt['dist'] = False
         rank = -1
         print('Disabled distributed training.')
     else:
+        opt['dist'] = True
         init_dist()
         world_size = torch.distributed.get_world_size()
         rank = torch.distributed.get_rank()
@@ -84,8 +92,8 @@ def main():
     torch.backends.cudnn.benchmark = True
     # torch.backends.cudnn.deterministic = True
 
-    # Step 1: Split images into 36 sub-images (comment if already done)
-    # split_all_images(input_folder = opt['datasets']['TD']['data_path'], output_folder = opt['datasets']['TD']['split_path_ori'], grid_size = 2)
+    # Step 1: Split images into n^2 sub-images (comment if already done)
+    split_all_images(input_folder = opt['datasets']['TD']['data_path'], output_folder = opt['datasets']['TD']['split_path_ori'], grid_size = 2)
 
     # ## create train and val dataloader
     # dataset_ratio = 200  # enlarge the size of each epoch
