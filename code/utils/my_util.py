@@ -1,12 +1,127 @@
+import numpy as np
 import torch
 import torchvision.transforms.functional as TF
 from PIL import Image
 import os
-import numpy as np
 import math
+from .reed_solomons import compute_parity, recover_original
 from .util import save_img, tensor2img, decoded_message_error_rate
 
 # ----- VN Start -----
+## Explaination: Load copyright and metadata from file -> Return list of dictionary ({'copyright': str, 'metadata': list})
+def load_copyright_metadata_from_files(file_path):
+    results = []
+    with open(file_path, 'r') as file:
+        lines = file.read().splitlines()  # reads lines without newline characters
+    
+    i = 0
+    while i < len(lines):
+        # The first line of a block is the image number (e.g. "0001"). Skip it.
+        if len(lines[i]) == 4 and lines[i].isdigit():
+            i += 1
+        else:
+            # If the expected image number is not found, you may handle the error as needed.
+            raise ValueError(f"Expected an image number at line {i+1}, got: {lines[i]}")
+        
+        # Check if there is at least one 64-bit string for this image.
+        if i >= len(lines):
+            break
+        
+        # The first 64-bit string is considered as copyright.
+        current_copyright = lines[i]
+        i += 1
+        current_metadata = []
+        
+        # All subsequent lines until the next image number or end of file are metadata.
+        while i < len(lines):
+            if len(lines[i]) == 4 and lines[i].isdigit():
+                break
+            current_metadata.append(lines[i])
+            i += 1
+        
+        results.append({
+            "copyright": current_copyright,
+            "metadata": current_metadata
+        })
+    
+    return results
+
+## Explaination: Compute correction code for copyright and metadata -> Return list of dictionary ({'copyright': str, 'metadata': list})
+def compute_parity_from_list_copyright_metadata(list_copyright_metadata):
+    result = []
+    for i in range(len(list_copyright_metadata)):
+        parity_data = {
+            "copyright": compute_parity(list_copyright_metadata[i]["copyright"]),
+            "metadata": []
+        }
+        for metadata in list_copyright_metadata[i]["metadata"]:
+            parity_metadata = compute_parity(metadata)
+            parity_data["metadata"].append(parity_metadata)
+        result.append(parity_data)
+    return result
+
+## Explaination: Return message correspond to dictionary (copyright or metadata)
+def compute_message(index, dict_copyright_metadata, dict_parity_copyright_metadata):
+    if (index == 0):
+        return dict_copyright_metadata['copyright']
+    elif (index == 1):
+        return dict_parity_copyright_metadata['copyright']
+    elif (index % 2 == 0):
+        return dict_copyright_metadata['metadata'][index // 2 - 1]
+    return dict_parity_copyright_metadata['metadata'][index // 2 - 1]
+
+## Explaination: Convert bit string to numpy type
+def bit_string_to_messagenp(bit_string, batch_size=1):
+    """
+    Chuyển chuỗi bit (ví dụ: "0101...") thành mảng numpy với mỗi bit được chuyển:
+      '0' -> -0.5, '1' -> 0.5.
+    
+    Args:
+        bit_string (str): Chuỗi bit, ví dụ có độ dài 64.
+        batch_size (int): Số lượng bản sao (batch) cần tạo.
+        
+    Returns:
+        np.ndarray: Mảng có kích thước (batch_size, len(bit_string)).
+    """
+    mapping = {'0': -0.5, '1': 0.5}
+    # Chuyển đổi từng ký tự theo mapping
+    message = np.array([mapping[b] for b in bit_string], dtype=float)
+    # Reshape về dạng (1, message_length)
+    message = message.reshape(1, -1)
+    # Nếu cần nhiều batch, nhân bản theo batch_size
+    if batch_size > 1:
+        message = np.tile(message, (batch_size, 1))
+    return message
+
+## Explaination: Take copyright, metadata (before and after) from lists
+def get_copyright_metadata_from_list(list_message, list_recmessage):
+    copyright_before = list_message[0]
+    copyright_after = list_recmessage[0]
+    metadata_before = ""
+    metadata_after = ""
+    for i in range(2, len(list_message), 2):
+        metadata_before = metadata_before + list_message[i]
+    for i in range(2, len(list_recmessage), 2):
+        metadata_after = metadata_after + list_recmessage[i]
+    return copyright_before, copyright_after, metadata_before, metadata_after
+
+## Explaination: Convert tensor to binary string
+def tensor_to_binary_string(tensor):
+    """
+    Chuyển đổi tensor chứa các giá trị 0.0 hoặc 1.0 thành chuỗi nhị phân.
+    
+    Args:
+        tensor (torch.Tensor): Tensor với các giá trị 0 hoặc 1, có bất kỳ hình dạng nào.
+    
+    Returns:
+        str: Chuỗi gồm các chữ số '0' và '1', ví dụ "1000011...".
+    """
+    # Đưa tensor về CPU nếu cần và làm phẳng thành vector 1 chiều
+    flat = tensor.cpu().view(-1)
+    # Chuyển từng giá trị sang int và tạo chuỗi nhị phân
+    binary_string = ''.join(str(int(round(val.item()))) for val in flat)
+    return binary_string
+
 ## Explaination: Split parent images into child images
 def split_and_save_image_torch(image_path, output_folder="images", num_child_images = 4):
     """
@@ -72,9 +187,7 @@ def split_all_images(input_folder="A", output_folder="B", num_child_images = 4, 
         
         # Gọi hàm split (giả sử hàm này đã được định nghĩa)
         split_and_save_image_torch(img_path, save_dir, num_child_images=num_child_images)
-# ----- VN End -----
 
-# ----- VN Start -----
 ## Explaination: Combine child tensors to parent tensor (4 dimensions)
 def combine_torch_tensors_4d(list_container, num_images=None):
     # Nếu không truyền num_images, mặc định bằng độ dài của list_container
@@ -132,10 +245,8 @@ def combine_torch_tensors_4d(list_container, num_images=None):
     result = torch.cat(grid_list, dim=0)  # shape (B, C, root*H, root*W)
     
     return result
-# ----- VN End -----
 
-# ----- VN Start -----
-# Explaination: Split parent tensor to child tensors (4 dimensions)
+## Explaination: Split parent tensor to child tensors (4 dimensions)
 def split_torch_tensors_4d(parent_container_grid, num_child_images=4):
     grid_size = int(math.sqrt(num_child_images))
     B, C, H_total, W_total = parent_container_grid.shape
@@ -157,10 +268,8 @@ def split_torch_tensors_4d(parent_container_grid, num_child_images=4):
             patches.append(patch)
 
     return patches
-# ----- VN End -----
 
-# ----- VN Start -----
-# Explaination: Write output information to file
+## Explaination: Write output information to file
 def write_extracted_messages(parent_image_id, copyright_before,
                              copyright_after, metadata_before,
                              metadata_after, out_file_path):

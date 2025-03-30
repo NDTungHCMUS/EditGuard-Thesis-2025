@@ -17,10 +17,8 @@ import numpy as np
 
 # ----- VN Start -----
 ## Explaination: Import library
-from utils.image_handler import split_all_images, combine_images_from_folder, combine_torch_tensors_4d, split_torch_tensors_4d, save_tensor_images, write_extracted_messages
 from utils.random_walk import random_walk_unique
-from utils.preprocess import load_pairs_from_file, load_copyright_metadata_from_files, tensor_to_binary_string, compute_parity_from_list_copyright_metadata, compute_message, get_copyright_metadata_from_list
-from utils.mapping import create_list_data
+from utils.my_util import load_copyright_metadata_from_files, tensor_to_binary_string, compute_parity_from_list_copyright_metadata, compute_message, get_copyright_metadata_from_list, split_all_images, combine_torch_tensors_4d, split_torch_tensors_4d, write_extracted_messages
 from utils.reed_solomons import compute_parity, recover_original
 import global_variables
 # ------ VN End ------
@@ -123,11 +121,6 @@ def main():
     # # random_walk_squeuence = random_walk_unique()
     # # print("RANDOM WALK:", random_walk_squeuence)
 
-    # # # Load copyright and metadata from files
-    # # list_copyright_metadata = load_pairs_from_file(opt['datasets']['TD']['copyright_path'])
-    # # mapping_data = create_list_data(random_walk_squeuence, list_copyright_metadata[0][0], list_copyright_metadata[0][1])
-    # # print("MAPPING_DATA:", mapping_data)
-
     # ---- VN Start -----
     ## Explaination: Create copyright, metadata and corresponding parity
     list_dict_copyright_metadata = load_copyright_metadata_from_files(opt['datasets']['TD']['copyright_path'])
@@ -138,7 +131,8 @@ def main():
     ## Explaination: Initialize neccessary variables
     cnt_cannot_solve = 0
     num_child_images = opt['datasets']['TD']['num_child_images']
-    width, height = opt['datasets']['TD']['width'], opt['datasets']['TD']['height']
+    bit_error_list_without_correction_code = []
+    bit_error_list_with_correction_code = []
 
     ## Explaination: Main flow
     for parent_image_id, val_data in enumerate(val_loader):  
@@ -150,15 +144,11 @@ def main():
                 'LQ': val_data['LQ'][i].unsqueeze(0),
                 'GT': val_data['GT'][i].unsqueeze(0)
             }
-            # print("Child Data of parent: {parent_image_id}, child: {i} is:", child_data)
-            # print("Shape LQ of Child Data:", child_data['LQ'].shape)
-            # print("Shape GT of Child Data:", child_data['GT'].shape)
             model.feed_data(child_data)
             message = compute_message(i, list_dict_copyright_metadata[parent_image_id], list_dict_parity_copyright_metadata[parent_image_id])
             I_container, messageTensor = model.embed(message)
             list_messageTensor.append(messageTensor)
             list_container.append(I_container)
-            print(f"MESSAGE: of child {i}, parent {parent_image_id}:",message)
 
         # Step 1.1: Save n^2 images to folder
         for i in range(len(list_container)):
@@ -195,15 +185,9 @@ def main():
             output_folder = os.path.join(opt['datasets']['TD']['split_path_rec'], folder_name)
             save_img_path = os.path.join(output_folder,f'{str(i).zfill(4)}.png')
             util.save_img(child_rec_img, save_img_path)
-        # save_tensor_images(list_container_rec, parent_image_id, opt['datasets']['TD']['split_path_rec'])
-        # print("Shape of list_container_rec[0]:", list_container_rec[0].shape)
-        # for i in range(len(list_container_rec)):
-        #     print(f"List_container_rec {i}", list_container_rec[i])
             
         list_recmessage = []
         list_message = []
-        print("LENGTH of list message: ", len(list_messageTensor))
-
         # Step 5: Extract from n^2 child images
         for i in range(0, num_child_images):
             recmessage, message = model.extract(list_messageTensor[i], y_forw = list_rec[i], y = list_rec_quantize[i])
@@ -217,27 +201,26 @@ def main():
         
         # Step 5.2: Get copyright (before, after), metadata (before, after) from list_message, list_recmessage
         copyright_before, copyright_after, metadata_before, metadata_after = get_copyright_metadata_from_list(list_message, list_recmessage)
-        write_extracted_messages(parent_image_id, copyright_before, copyright_after, metadata_before, metadata_after, opt['datasets']['TD']['copyright_output'])
+        bit_error = write_extracted_messages(parent_image_id, copyright_before, copyright_after, metadata_before, metadata_after, opt['datasets']['TD']['copyright_output'])
+        bit_error_list_without_correction_code.append(bit_error)
 
-        
-        # Step 6: Try to fix base on Reed-Solomons
-        
-        # list_input_to_correct = []
-        # list_recmessage_fix = []
-        # # Build string to do reed-solomons
-        # for i in range(0, num_child_images, 2):
-        #   list_input_to_correct.append(list_recmessage[i])
-        # for i in range(1, num_child_images, 2):
-        #   list_input_to_correct[i//2] += list_recmessage[i]
-        # print("LIST SOLOMON:", list_input_to_correct)
-        # for i in range(0, num_child_images // 2):
-        #   a = recover_original(str(list_input_to_correct[i]))
-        #   print("DA CORRECT:", a)
-        #   if (a == -1):
-        #     cnt_cannot_solve += 1
-        #   else:
-        #     list_recmessage_fix.append(a[:64])
-        #     list_recmessage_fix.append(a[64:])
+        # Step 6: Try to fix base on Reed-Solomons        
+        list_input_to_correct = []
+        list_recmessage_fix = []
+        # Build string to do reed-solomons
+        for i in range(0, num_child_images, 2):
+          list_input_to_correct.append(list_recmessage[i])
+        for i in range(1, num_child_images, 2):
+          list_input_to_correct[i//2] += list_recmessage[i]
+        print("LIST SOLOMON:", list_input_to_correct)
+        for i in range(0, num_child_images // 2):
+          a = recover_original(str(list_input_to_correct[i]))
+          print("DA CORRECT:", a)
+          if (a == -1):
+            cnt_cannot_solve += 1
+          else:
+            list_recmessage_fix.append(a[:64])
+            list_recmessage_fix.append(a[64:])
         # write_extracted_messages(parent_image_id, list_message, list_recmessage_fix, opt['datasets']['TD']['copyright_output_fix'])
 
     # print("CANNOT SOLVE:", cnt_cannot_solve)

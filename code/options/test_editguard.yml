@@ -50,7 +50,7 @@ datasets:
     split_path_rec: ../dataset/valAGE-Set-10-eles-512px-split-rec
     merge_path: ../dataset/valAGE-Set-10-eles-512px-merge
     copyright_output: ../dataset/copyright-10-eles-512px-output.txt
-  # ------ VN End ------
+    # ------ VN End ------
 
     N_frames: 1
     padding: 'new_info'

@@ -18,7 +18,7 @@ import os
 import sys
 import math
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from utils.preprocess import bit_string_to_messagenp
+from utils.my_util import bit_string_to_messagenp
 
 import numpy as np
 import random
