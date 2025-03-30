@@ -1,5 +1,5 @@
 import random
-
+import global_variables
 # ----- VN Start -----
 def generate_dataset(num_images, num_strings_per_image, output_filename="../dataset/copyrights-10-eles.txt"):
     lines = []
@@ -20,6 +20,10 @@ def generate_dataset(num_images, num_strings_per_image, output_filename="../data
         f.write(file_content)
 
 if __name__ == "__main__":
-    generate_dataset(10, 2)
+    generate_dataset(
+        global_variables.TEST_CONFIG['datasets']['TD']['num_images'], 
+        1 + global_variables.TEST_CONFIG['metadata_length'] // 64,
+        "../dataset/copyrights-20-eles.txt"
+    )
     
 # ----- VN End -----
