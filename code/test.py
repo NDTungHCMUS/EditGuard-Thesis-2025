@@ -19,7 +19,7 @@ import numpy as np
 ## Explaination: Import library
 from utils.image_handler import split_all_images, combine_images_from_folder, combine_torch_tensors_4d, split_torch_tensors_4d, save_tensor_images, write_extracted_messages
 from utils.random_walk import random_walk_unique
-from utils.preprocess import load_pairs_from_file, load_copyright_metadata_from_files, tensor_to_binary_string, compute_parity_from_list_copyright_metadata, compute_message
+from utils.preprocess import load_pairs_from_file, load_copyright_metadata_from_files, tensor_to_binary_string, compute_parity_from_list_copyright_metadata, compute_message, get_copyright_metadata_from_list
 from utils.mapping import create_list_data
 from utils.reed_solomons import compute_parity, recover_original
 import global_variables
@@ -135,13 +135,12 @@ def main():
     # ---- VN End -----
     
     # ----- VN Start -----
-    # Explaination: Initialize neccessary variables
+    ## Explaination: Initialize neccessary variables
     cnt_cannot_solve = 0
     num_child_images = opt['datasets']['TD']['num_child_images']
     width, height = opt['datasets']['TD']['width'], opt['datasets']['TD']['height']
 
-
-    # Explaination: Main flow
+    ## Explaination: Main flow
     for parent_image_id, val_data in enumerate(val_loader):  
         # Step 1: Embed data into images
         list_container = []
@@ -171,7 +170,6 @@ def main():
 
         # Step 2: Combine n^2 images into one (4 dimensions)
         parent_container = combine_torch_tensors_4d(list_container, num_images = num_child_images)
-        parent_container = torch.nn.functional.interpolate(parent_container, size=(width, height), mode='nearest', align_corners=None)
 
         # Step 2.1: Save parent_container to folder
         parent_container_img = util.tensor2img(parent_container.detach()[0].float().cpu())
@@ -202,47 +200,45 @@ def main():
         # for i in range(len(list_container_rec)):
         #     print(f"List_container_rec {i}", list_container_rec[i])
             
-    #     list_fake_H = []
-    #     list_fake_H_h = []
-    #     list_forw_L = []
-    #     list_recmessage = []
-    #     list_message = []
-    #     print("LENGTH of list message: ", len(list_messageTensor))
-    #     # Step 5: Extract from 36 images
-    #     for i in range(0, n * n):
-    #         fake_H, fake_H_h, forw_L, recmessage, message = model.extract(list_messageTensor[i], y_forw = list_container_rec[i], y = list_container_rec_quantize[i])
-    #         list_fake_H.append(fake_H)
-    #         list_fake_H_h.append(fake_H_h)
-    #         list_forw_L.append(forw_L)
-    #         list_recmessage.append(recmessage)
-    #         list_message.append(message)
+        list_recmessage = []
+        list_message = []
+        print("LENGTH of list message: ", len(list_messageTensor))
 
-    #     # Step 5.1: Save all messages to file
-    #     for i in range(0, n * n):
-    #       list_message[i] = tensor_to_binary_string(list_message[i])
-    #       list_recmessage[i] = tensor_to_binary_string(list_recmessage[i])
-    #     write_extracted_messages(parent_image_id, list_message, list_recmessage, opt['datasets']['TD']['copyright_output'])
+        # Step 5: Extract from n^2 child images
+        for i in range(0, num_child_images):
+            recmessage, message = model.extract(list_messageTensor[i], y_forw = list_rec[i], y = list_rec_quantize[i])
+            list_recmessage.append(recmessage)
+            list_message.append(message)
+
+        # Step 5.1: Convert list_message, list_recmessage from tensor to binary string
+        for i in range(0, num_child_images):
+          list_message[i] = tensor_to_binary_string(list_message[i])
+          list_recmessage[i] = tensor_to_binary_string(list_recmessage[i])
+        
+        # Step 5.2: Get copyright (before, after), metadata (before, after) from list_message, list_recmessage
+        copyright_before, copyright_after, metadata_before, metadata_after = get_copyright_metadata_from_list(list_message, list_recmessage)
+        write_extracted_messages(parent_image_id, copyright_before, copyright_after, metadata_before, metadata_after, opt['datasets']['TD']['copyright_output'])
 
         
-    #     # Step 6: Try to fix base on Reed-Solomons
+        # Step 6: Try to fix base on Reed-Solomons
         
-    #     list_input_to_correct = []
-    #     list_recmessage_fix = []
-    #     # Build string to do reed-solomons
-    #     for i in range(0, n * n, 2):
-    #       list_input_to_correct.append(list_recmessage[i])
-    #     for i in range(1, n * n, 2):
-    #       list_input_to_correct[i//2] += list_recmessage[i]
-    #     print("LIST SOLOMON:", list_input_to_correct)
-    #     for i in range(0, n * n // 2):
-    #       a = recover_original(str(list_input_to_correct[i]))
-    #       print("DA CORRECT:", a)
-    #       if (a == -1):
-    #         cnt_cannot_solve += 1
-    #       else:
-    #         list_recmessage_fix.append(a[:64])
-    #         list_recmessage_fix.append(a[64:])
-    #     write_extracted_messages(parent_image_id, list_message, list_recmessage_fix, opt['datasets']['TD']['copyright_output_fix'])
+        # list_input_to_correct = []
+        # list_recmessage_fix = []
+        # # Build string to do reed-solomons
+        # for i in range(0, num_child_images, 2):
+        #   list_input_to_correct.append(list_recmessage[i])
+        # for i in range(1, num_child_images, 2):
+        #   list_input_to_correct[i//2] += list_recmessage[i]
+        # print("LIST SOLOMON:", list_input_to_correct)
+        # for i in range(0, num_child_images // 2):
+        #   a = recover_original(str(list_input_to_correct[i]))
+        #   print("DA CORRECT:", a)
+        #   if (a == -1):
+        #     cnt_cannot_solve += 1
+        #   else:
+        #     list_recmessage_fix.append(a[:64])
+        #     list_recmessage_fix.append(a[64:])
+        # write_extracted_messages(parent_image_id, list_message, list_recmessage_fix, opt['datasets']['TD']['copyright_output_fix'])
 
     # print("CANNOT SOLVE:", cnt_cannot_solve)
 

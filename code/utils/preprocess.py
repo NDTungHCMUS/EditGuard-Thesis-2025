@@ -109,6 +109,17 @@ def bit_string_to_messagenp(bit_string, batch_size=1):
         message = np.tile(message, (batch_size, 1))
     return message
 
+def get_copyright_metadata_from_list(list_message, list_recmessage):
+    copyright_before = list_message[0]
+    copyright_after = list_recmessage[0]
+    metadata_before = ""
+    metadata_after = ""
+    for i in range(2, len(list_message), 2):
+        metadata_before = metadata_before + list_message[i]
+    for i in range(2, len(list_recmessage), 2):
+        metadata_after = metadata_after + list_recmessage[i]
+    return copyright_before, copyright_after, metadata_before, metadata_after
+
 def tensor_to_binary_string(tensor):
     """
     Chuyển đổi tensor chứa các giá trị 0.0 hoặc 1.0 thành chuỗi nhị phân.

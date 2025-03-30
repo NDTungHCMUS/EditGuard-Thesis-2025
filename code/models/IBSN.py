@@ -16,6 +16,7 @@ from utils.JPEG import DiffJPEG
 import utils.util as util
 import os
 import sys
+import math
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from utils.preprocess import bit_string_to_messagenp
 
@@ -805,7 +806,9 @@ class Model_VSN(BaseModel):
                     mask_image = Image.open(masksrc + str(i).zfill(4) + ".png").convert("L")
 
                     # ----- VN Start -----
-                    mask_image = mask_image.resize((global_variables.TEST_CONFIG['datasets']['TD']['width'], global_variables.TEST_CONFIG['datasets']['TD']['height']))
+                    width, height = global_variables.TEST_CONFIG['datasets']['TD']['width'], global_variables.TEST_CONFIG['datasets']['TD']['height']
+                    edge_size = int(math.sqrt(global_variables.TEST_CONFIG['datasets']['TD']['num_child_images']))
+                    mask_image = mask_image.resize((width * edge_size, height * edge_size))
                     ## ----- ORIGINAL -----
                     # mask_image = mask_image.resize((512, 512))
                     # ----- VN End ------
@@ -937,7 +940,7 @@ class Model_VSN(BaseModel):
 
         # self.netG.train()
 
-        return fake_H, fake_H_h, forw_L, recmessage, message
+        return recmessage, message
     
     def get_visuals(self, ref_L, real_H, fake_H, fake_H_h, forw_L, recmessage, message):
         b, n, t, c, h, w = ref_L.shape

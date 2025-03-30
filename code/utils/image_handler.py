@@ -6,7 +6,7 @@ import numpy as np
 import math
 from .util import save_img, tensor2img, decoded_message_error_rate
 
-# --- VN Start -----
+# ----- VN Start -----
 ## Explaination: Split parent images into child images
 def split_and_save_image_torch(image_path, output_folder="images", num_child_images = 4):
     """
@@ -72,96 +72,10 @@ def split_all_images(input_folder="A", output_folder="B", num_child_images = 4, 
         
         # Gọi hàm split (giả sử hàm này đã được định nghĩa)
         split_and_save_image_torch(img_path, save_dir, num_child_images=num_child_images)
+# ----- VN End -----
 
-# split_and_save_image_torch("input.jpg") 
-
-# Combine tất cả ảnh trong thư mục input thành 1 ảnh lớn lưu trong thư mục output
-def combine_images_from_folder(input_folder, output_folder, num_images=36):
-    """
-    Gom num_images ảnh trong folder thành một ảnh lớn theo dạng lưới √num_images x √num_images.
-    Mặc định num_images = 36 (6x6). Có thể thay đổi thành 4 (2x2) hoặc 9 (3x3).
-    
-    Args:
-        input_folder (str): Đường dẫn chứa các ảnh nhỏ (ví dụ: a/dataset/0001).
-        output_folder (str): Đường dẫn chứa ảnh tổng hợp (ví dụ: b/dataset).
-        num_images (int): Số lượng ảnh muốn ghép (nên là số chính phương: 4, 9, 16, 25, 36,...).
-    """
-    # Kiểm tra num_images có phải số chính phương hay không
-    root = int(math.sqrt(num_images))
-    if root * root != num_images:
-        raise ValueError(f"num_images = {num_images} không phải số chính phương (4, 9, 16, 25, 36, ...)")
-
-    # Tạo thư mục đầu ra nếu chưa tồn tại
-    os.makedirs(output_folder, exist_ok=True)
-
-    # Lấy danh sách file .png trong thư mục
-    all_files = sorted([
-        f for f in os.listdir(input_folder)
-        if f.lower().endswith('.png')
-    ])
-
-    # Kiểm tra xem đủ ảnh hay không
-    if len(all_files) < num_images:
-        raise ValueError(
-            f"Số ảnh trong thư mục {input_folder} không đủ (tìm thấy {len(all_files)}, yêu cầu {num_images})."
-        )
-
-    # Chỉ lấy đúng num_images file đầu tiên (hoặc theo nhu cầu)
-    selected_files = all_files[:num_images]
-
-    # Đọc ảnh từ danh sách file
-    patches = []
-    for filename in selected_files:
-        patch_path = os.path.join(input_folder, filename)
-        patch = Image.open(patch_path)
-        patches.append(patch)
-
-    # Giả sử tất cả ảnh có cùng kích thước
-    patch_width, patch_height = patches[0].size
-
-    # Tạo ảnh mới kích thước: (root * patch_width) x (root * patch_height)
-    combined_width = patch_width * root
-    combined_height = patch_height * root
-    combined_image = Image.new("RGB", (combined_width, combined_height))
-
-    # Dán từng ảnh vào vị trí tương ứng
-    for idx, patch in enumerate(patches):
-        row = idx // root
-        col = idx % root
-        combined_image.paste(patch, (col * patch_width, row * patch_height))
-
-    # Lấy tên folder cuối của input_folder làm tên file đầu ra
-    folder_name = os.path.basename(os.path.normpath(input_folder))
-    output_file_path = os.path.join(output_folder, f"{folder_name}.png")
-
-    # Lưu ảnh tổng hợp
-    combined_image.save(output_file_path)
-    print(f"Đã lưu ảnh tổng hợp: {output_file_path}")
-
-# Duyệt qua tât cả các folder con trong input_dataset_folder và gom ảnh từng folder con thành 1 ảnh lớn
-def combine_all_images(input_dataset_folder, output_folder):
-    """
-    Lặp qua toàn bộ folder con trong input_dataset_folder (ví dụ: a/dataset/000x)
-    và thực hiện ghép 36 ảnh trong mỗi folder con thành một ảnh lớn.
-    
-    Args:
-        input_dataset_folder (str): Đường dẫn chứa các folder con (ví dụ: a/dataset).
-        output_folder (str): Đường dẫn chứa ảnh tổng hợp (ví dụ: b/dataset).
-    """
-    # Lấy danh sách tất cả các folder con trong input_dataset_folder
-    subfolders = [entry.path for entry in os.scandir(input_dataset_folder) if entry.is_dir()]
-    
-    if not subfolders:
-        print("Không tìm thấy folder con nào trong", input_dataset_folder)
-        return
-    
-    for subfolder in subfolders:
-        try:
-            combine_images_from_folder(subfolder, output_folder)
-        except Exception as e:
-            print(f"Lỗi khi xử lý folder {subfolder}: {e}")
-
-# Tạo một tensor chứa n^2 ảnh từ n^2 tensor nhỏ (4 chiều)
+# ----- VN Start -----
+## Explaination: Combine child tensors to parent tensor (4 dimensions)
 def combine_torch_tensors_4d(list_container, num_images=None):
     # Nếu không truyền num_images, mặc định bằng độ dài của list_container
     if num_images is None:
@@ -218,8 +132,10 @@ def combine_torch_tensors_4d(list_container, num_images=None):
     result = torch.cat(grid_list, dim=0)  # shape (B, C, root*H, root*W)
     
     return result
+# ----- VN End -----
 
-# Chia một tensor lớn thành list n^2 tensor nhỏ (4 chiều)
+# ----- VN Start -----
+# Explaination: Split parent tensor to child tensors (4 dimensions)
 def split_torch_tensors_4d(parent_container_grid, num_child_images=4):
     grid_size = int(math.sqrt(num_child_images))
     B, C, H_total, W_total = parent_container_grid.shape
@@ -241,140 +157,90 @@ def split_torch_tensors_4d(parent_container_grid, num_child_images=4):
             patches.append(patch)
 
     return patches
+# ----- VN End -----
 
-# combine_all_images("E:/Year_4/Thesis/EditGuard-Split-Image/dataset/valAGE-Set-5-eles-split-ori", "E:/Year_4/Thesis/EditGuard-Split-Image/dataset/valAGE-Set-5-eles-merge")  # Gom ảnh từ thư mục images và lưu ra output.jpg
-
-def tensor_to_pil(tensor):
+# ----- VN Start -----
+# Explaination: Write output information to file
+def write_extracted_messages(parent_image_id, copyright_before,
+                             copyright_after, metadata_before,
+                             metadata_after, out_file_path):
     """
-    Chuyển một tensor có ít nhất 3 chiều thành ảnh PIL.Image bằng cách chỉ lấy 3 chiều cuối.
+    Ghi ra file thông tin trích xuất cho một ảnh với định dạng:
     
-    Ví dụ:
-    - Nếu tensor có shape (1, 3, 512, 512) → chuyển thành (3, 512, 512)
-    - Nếu tensor có shape (B, N, 3, H, W) → chuyển thành (3, H, W) (bỏ qua các chiều trước)
-    """
-    # Nếu tensor đang nằm trên GPU, chuyển về CPU
-    if tensor.device != torch.device('cpu'):
-        tensor = tensor.cpu()
+    Image_ID: <parent_image_id, định dạng 4 chữ số>
+    Copyright Before: <dãy 64 bit>
+    Copyright After: <dãy 64 bit>
+    Copyright_Bit_Error: <số bit khác nhau giữa copyright trước và sau chia cho 64>
+    Copyright_Wrong_Position: <list các vị trí khác nhau>
+    Metadata Before: <dãy metadata, mỗi 64 bit cách nhau bởi dấu |>
+    Metadata After: <dãy metadata, mỗi 64 bit cách nhau bởi dấu |>
+    Metadata_Bit_Error: <số bit khác nhau giữa metadata trước và sau chia cho tổng số bit>
+    Metadata_Wrong_Position: <list các vị trí khác nhau>
+    General_Bit_Error: <số bit khác nhau trong toàn bộ dãy (copyright + metadata) chia cho tổng số bit>
+    ---------------------
     
-    # Nếu tensor có nhiều hơn 3 chiều, chỉ lấy 3 chiều cuối
-    if tensor.dim() > 3:
-        # Sử dụng view để lấy shape của 3 chiều cuối
-        tensor = tensor.contiguous().view(*tensor.shape[-3:])
-    
-    # Chuyển tensor thành PIL Image (giả sử giá trị tensor nằm trong khoảng [0, 1] hoặc [0, 255])
-    return TF.to_pil_image(tensor)
-
-# Cho 1 list tensor, id của ảnh cha, lưu ảnh vào thư mục output_dir/parent_image_id/child_image_id.png
-def save_tensor_images(list_container, parent_image_id, output_dir='a', out_type=np.uint8, min_max=(0,1)):
-    """
-    Lưu danh sách các tensor thành ảnh bằng cách sử dụng hàm save_img.
-    Ảnh sẽ được lưu vào thư mục: output_dir/parent_image_id.zfill(4)
-    Tên file của ảnh sẽ có định dạng: i.zfill(4) + '.png' (ví dụ: 0001.png, 0002.png, ...)
-
     Args:
-        list_container (list): Danh sách các tensor.
-        parent_image_id (str hoặc int): ID của ảnh cha để tạo folder.
-        output_dir (str): Thư mục gốc để lưu ảnh (mặc định 'a').
-        out_type: Kiểu dữ liệu đầu ra của ảnh (mặc định np.uint8).
-        min_max (tuple): Khoảng giá trị để chuẩn hóa tensor (mặc định (0,1)).
+        parent_image_id (int): Số nhận dạng ảnh gốc (0, 1, 2, ...).
+        copyright_before (str): Dãy 64 bit trước khi sửa.
+        copyright_after (str): Dãy 64 bit sau khi sửa.
+        metadata_before (str): Dãy metadata trước khi sửa (độ dài bội số của 64).
+        metadata_after (str): Dãy metadata sau khi sửa (độ dài bội số của 64).
+        out_file_path (str): Đường dẫn đến file output.
+        
+    Returns:
+        float: Giá trị general_bit_error.
     """
-    folder_name = str(parent_image_id + 1).zfill(4)
-    output_folder = os.path.join(output_dir, folder_name)
-    os.makedirs(output_folder, exist_ok=True)
+    # Định dạng parent_image_id thành chuỗi 4 chữ số
+    image_id_str = f"{parent_image_id:04d}"
+    
+    # Kiểm tra độ dài của copyright và metadata
+    if len(copyright_before) != 64 or len(copyright_after) != 64:
+        raise ValueError("Copyright trước và sau phải có đúng 64 bit.")
+    
+    if len(metadata_before) % 64 != 0 or len(metadata_after) % 64 != 0:
+        raise ValueError("Metadata trước và sau phải là bội số của 64 bit.")
+    
+    # Tính bit error cho copyright
+    copyright_diff_positions = [i for i in range(64) 
+                                if copyright_before[i] != copyright_after[i]]
+    copyright_diff_count = len(copyright_diff_positions)
+    copyright_bit_error = copyright_diff_count / 64
+    
+    # Tính bit error cho metadata
+    metadata_len = len(metadata_before)
+    metadata_diff_positions = [i for i in range(metadata_len)
+                               if metadata_before[i] != metadata_after[i]]
+    metadata_diff_count = len(metadata_diff_positions)
+    metadata_bit_error = metadata_diff_count / metadata_len
+    
+    # Tính general bit error cho toàn bộ dãy (copyright + metadata)
+    combined_before = copyright_before + metadata_before
+    combined_after = copyright_after + metadata_after
+    combined_length = len(combined_before)  # = 64 + metadata_len
+    combined_diff_count = sum(1 for i in range(combined_length)
+                              if combined_before[i] != combined_after[i])
+    general_bit_error = combined_diff_count / combined_length
 
-    for i, tensor in enumerate(list_container):
-        # Chuyển tensor thành mảng numpy đại diện cho ảnh
-        img_np = tensor2img(tensor, out_type=out_type, min_max=min_max)
-        
-        # Tạo tên file theo định dạng: 0001.png, 0002.png, ...
-        file_name = f"{i}.png"
-        file_path = os.path.join(output_folder, file_name)
-        
-        # Lưu ảnh sử dụng hàm save_img
-        save_img(img_np, file_path)
-
-
-def write_extracted_messages(parent_image_id, list_message, list_recmessage, out_file_path):
-    """
-    Append thông tin của các ảnh con vào file text theo định dạng:
-      Line 1: parent_image_id,child_image_id
-      Line 2: message (dưới dạng tensor)
-      Line 3: recmessage (dưới dạng tensor)
-      Line 4: error_rate của cặp
-      Line 5: dòng trống phân cách
-
-    Sau đó, ghi và in thêm một dòng cho trung bình error rate của tất cả các ảnh con.
-
-    Nếu message và recmessage là tensor, giữ nguyên tensor và tính error rate bằng
-    hàm decoded_message_error_rate (hoặc decoded_message_error_rate_batch) đã định nghĩa sẵn.
-
-    Args:
-        parent_image_id (int hoặc str): ID của ảnh cha.
-        list_message (list): Danh sách các message từ 36 ảnh con.
-        list_recmessage (list): Danh sách các recmessage từ 36 ảnh con.
-        out_file_path (str): Đường dẫn file text sẽ được lưu.
-    """
-    import os
-    import torch
-
-    error_rates = []  # Lưu error_rate cho từng cặp message/recmessage
-
-    # Kiểm tra file có tồn tại không, để quyết định ghi header hay append
-    file_exists = os.path.exists(out_file_path)
-    with open(out_file_path, 'a', encoding='utf-8') as f:
-        if not file_exists:
-            f.write("Extracted Messages:\n\n")
-        
-        for child_image_id, (message, recmessage) in enumerate(zip(list_message, list_recmessage)):
-            # Tính error rate cho cặp message, recmessage
-            try:
-                # Gọi hàm decoded_message_error_rate (giữ nguyên không sửa)
-                error_rate = decoded_message_error_rate(message, recmessage)
-            except Exception as e:
-                # Nếu có lỗi (ví dụ do việc convert tensor với nhiều phần tử), sử dụng fallback:
-                message_flat = message.view(message.shape[0], -1).squeeze()
-                recmessage_flat = recmessage.view(recmessage.shape[0], -1).squeeze()
-                error_count = sum([int(x.item()) for x in (message_flat.gt(0) != recmessage_flat.gt(0))])
-                length = message_flat.numel()
-                error_rate = error_count / length
-
-            # Nếu error_rate là tensor, chuyển về float
-            if isinstance(error_rate, torch.Tensor):
-                error_rate = error_rate.item()
-            
-            error_rates.append(error_rate)
-            
-            # Giữ nguyên tensor bằng string representation
-            message_str = str(message)
-            recmessage_str = str(recmessage)
-            
-            # Định dạng parent_image_id và child_image_id thành 4 chữ số
-            parent_str = str(parent_image_id).zfill(4)
-            child_str = str(child_image_id).zfill(4)
-            
-            # Ghi vào file với định dạng theo yêu cầu:
-            # Line 1: parent_image_id,child_image_id
-            f.write(f"{parent_str},{child_str}\n")
-            # Line 2: message
-            f.write(f"{message_str}\n")
-            # Line 3: recmessage
-            f.write(f"{recmessage_str}\n")
-            # Line 4: error_rate
-            f.write(f"{error_rate}\n")
-            # Line 5: dòng trống phân cách
-            f.write("\n")
-            
-            # In ra theo định dạng: message -> xuống hàng recmessage -> xuống hàng error
-            print(f"{message_str}\n{recmessage_str}\n{error_rate}\n")
-        
-        # Tính trung bình error rate nếu có giá trị tính được
-        if error_rates:
-            avg_error = sum(error_rates) / len(error_rates)
-        else:
-            avg_error = "N/A"
-        
-        # Ghi và in ra trung bình error rate
-        f.write("Average error rate:\n")
-        f.write(f"{avg_error}\n")
-        print("Average error rate:")
-        print(avg_error)
+    # Format metadata: chia thành các block 64 bit cách nhau bởi dấu "|"
+    def format_metadata(md):
+        return " | ".join([md[i:i+64] for i in range(0, len(md), 64)])
+    
+    metadata_before_formatted = format_metadata(metadata_before)
+    metadata_after_formatted = format_metadata(metadata_after)
+    
+    # Ghi thông tin ra file
+    with open(out_file_path, 'a') as f:
+        f.write(f"Image_ID: {image_id_str}\n")
+        f.write(f"Copyright Before: {copyright_before}\n")
+        f.write(f"Copyright After: {copyright_after}\n")
+        f.write(f"Copyright_Bit_Error: {copyright_bit_error}\n")
+        f.write(f"Copyright_Wrong_Position: {copyright_diff_positions}\n")
+        f.write(f"Metadata Before: {metadata_before_formatted}\n")
+        f.write(f"Metadata After: {metadata_after_formatted}\n")
+        f.write(f"Metadata_Bit_Error: {metadata_bit_error}\n")
+        f.write(f"Metadata_Wrong_Position: {metadata_diff_positions}\n")
+        f.write(f"General_Bit_Error: {general_bit_error}\n")
+        f.write("---------------------\n")
+    
+    return general_bit_error
+# ----- VN End -----

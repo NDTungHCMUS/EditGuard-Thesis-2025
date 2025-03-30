@@ -40,8 +40,8 @@ datasets:
     # ----- VN Start -----
     num_images: 10
     num_child_images: 4
-    width: 512
-    height: 512
+    width: 256
+    height: 256
     data_path: ../dataset/valAGE-Set
     txt_path:  ../dataset/sep_testlist_10-eles.txt
     copyright_path: ../dataset/copyrights-10-eles.txt
