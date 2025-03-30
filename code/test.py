@@ -116,8 +116,8 @@ def main():
             raise NotImplementedError('Phase [{:s}] is not recognized.'.format(phase))
 
     # Create model
-    # model = create_model(opt)
-    # model.load_test(args.ckpt)
+    model = create_model(opt)
+    model.load_test(args.ckpt)
       
     # # # Create Random Walk
     # # random_walk_squeuence = random_walk_unique()
@@ -135,12 +135,14 @@ def main():
     # ---- VN End -----
     
     # ----- VN Start -----
+    # Explaination: Initialize neccessary variables
     cnt_cannot_solve = 0
     num_child_images = opt['datasets']['TD']['num_child_images']
-    for parent_image_id, val_data in enumerate(val_loader):
-        # img_dir = os.path.join('results',opt['name'])
-        # util.mkdir(img_dir)
+    width, height = opt['datasets']['TD']['width'], opt['datasets']['TD']['height']
 
+
+    # Explaination: Main flow
+    for parent_image_id, val_data in enumerate(val_loader):  
         # Step 1: Embed data into images
         list_container = []
         list_messageTensor = []
@@ -152,11 +154,11 @@ def main():
             # print("Child Data of parent: {parent_image_id}, child: {i} is:", child_data)
             # print("Shape LQ of Child Data:", child_data['LQ'].shape)
             # print("Shape GT of Child Data:", child_data['GT'].shape)
-            # model.feed_data(child_data)
+            model.feed_data(child_data)
             message = compute_message(i, list_dict_copyright_metadata[parent_image_id], list_dict_parity_copyright_metadata[parent_image_id])
-            # I_container, messageTensor = model.embed(message)
-            # list_messageTensor.append(messageTensor)
-            # list_container.append(I_container)
+            I_container, messageTensor = model.embed(message)
+            list_messageTensor.append(messageTensor)
+            list_container.append(I_container)
             print(f"MESSAGE: of child {i}, parent {parent_image_id}:",message)
 
         # Step 1.1: Save n^2 images to folder
@@ -167,34 +169,38 @@ def main():
             save_img_path = os.path.join(output_folder,f'{str(i).zfill(4)}.png')
             util.save_img(child_container_img, save_img_path)
 
-    #     # Step 2: Combine n^2 images into one (4 dimensions)
-    #     parent_container = combine_torch_tensors_4d(list_container, num_images = n * n)
-    #     # parent_container = torch.nn.functional.interpolate(parent_container, size=(512, 512), mode='nearest', align_corners=None)
-    #     # print("Shape của parent container: ", parent_container.shape)
-    #     # print("Giá trị của Parent container: ", parent_container)
+        # Step 2: Combine n^2 images into one (4 dimensions)
+        parent_container = combine_torch_tensors_4d(list_container, num_images = num_child_images)
+        parent_container = torch.nn.functional.interpolate(parent_container, size=(width, height), mode='nearest', align_corners=None)
 
-    #     # Step 2.1: Save parent_container to folder
-    #     # parent_container_img = util.tensor2img(parent_container.detach()[0].float().cpu())
-    #     # save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id).zfill(4)}.png')
-    #     # util.save_img(parent_container_img, save_img_path)
+        # Step 2.1: Save parent_container to folder
+        parent_container_img = util.tensor2img(parent_container.detach()[0].float().cpu())
+        save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id + 1).zfill(4)}.png')
+        util.save_img(parent_container_img, save_img_path)
 
-    #     # Step 3: Diffusion on parent_container
-    #     parent_y_forw, parent_y = model.diffusion(image_id = parent_image_id, y_forw = parent_container)
+        # Step 3: Diffusion on parent_container
+        parent_y_forw, parent_y = model.diffusion(image_id = parent_image_id, y_forw = parent_container)
 
-    #     # Step 3.1: Save parent_y_forw to folder
-    #     # parent_rec_img = util.tensor2img(parent_y_forw)
-    #     # save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id).zfill(4)}_diffusion.png')
-    #     # util.save_img(parent_rec_img, save_img_path)
+        # Step 3.1: Save parent_y_forw to folder
+        parent_rec_img = util.tensor2img(parent_y_forw)
+        save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id + 1).zfill(4)}_diffusion.png')
+        util.save_img(parent_rec_img, save_img_path)
 
-    #     # Step 4: Split parent_rec into n^2 images
-    #     list_container_rec = split_torch_tensors_4d(parent_y_forw, grid_size = n)
-    #     list_container_rec_quantize = split_torch_tensors_4d(parent_y, grid_size = n)
+        # Step 4: Split parent_rec into n^2 images
+        list_rec = split_torch_tensors_4d(parent_y_forw, num_child_images = num_child_images)
+        list_rec_quantize = split_torch_tensors_4d(parent_y, num_child_images = num_child_images)
         
-    #     # Step 4.1: Save n^2 images to folder
-    #     save_tensor_images(list_container_rec, parent_image_id, opt['datasets']['TD']['split_path_rec'])
-    #     # print("Shape of list_container_rec[0]:", list_container_rec[0].shape)
-    #     # for i in range(len(list_container_rec)):
-    #     #     print(f"List_container_rec {i}", list_container_rec[i])
+        # Step 4.1: Save n^2 images to folder
+        for i in range(len(list_rec)):
+            child_rec_img = util.tensor2img(list_rec[i].detach()[0].float().cpu())
+            folder_name = str(parent_image_id + 1).zfill(4)
+            output_folder = os.path.join(opt['datasets']['TD']['split_path_rec'], folder_name)
+            save_img_path = os.path.join(output_folder,f'{str(i).zfill(4)}.png')
+            util.save_img(child_rec_img, save_img_path)
+        # save_tensor_images(list_container_rec, parent_image_id, opt['datasets']['TD']['split_path_rec'])
+        # print("Shape of list_container_rec[0]:", list_container_rec[0].shape)
+        # for i in range(len(list_container_rec)):
+        #     print(f"List_container_rec {i}", list_container_rec[i])
             
     #     list_fake_H = []
     #     list_fake_H_h = []
@@ -243,7 +249,8 @@ def main():
 
 
         
-
+    # img_dir = os.path.join('results',opt['name'])
+        # util.mkdir(img_dir)
     # # validation
     # # avg_psnr = 0.0
     # # avg_psnr_h = [0.0]*opt['num_image']

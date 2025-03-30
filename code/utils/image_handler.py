@@ -163,18 +163,6 @@ def combine_all_images(input_dataset_folder, output_folder):
 
 # Tạo một tensor chứa n^2 ảnh từ n^2 tensor nhỏ (4 chiều)
 def combine_torch_tensors_4d(list_container, num_images=None):
-    """
-    Kết hợp danh sách các tensor 4D (B, C, H, W) thành một tensor 4D (B, C, newH, newW),
-    sắp xếp theo dạng lưới √num_images x √num_images.
-    
-    Args:
-        list_container (List[torch.Tensor]): Danh sách các tensor 4D, mỗi tensor shape (B, C, H, W).
-        num_images (int, optional): Số lượng tensor sẽ được ghép. Mặc định = len(list_container).
-            Yêu cầu: num_images phải là số chính phương (4, 9, 16, 25, 36, ...).
-    
-    Returns:
-        torch.Tensor: Tensor 4D có shape (B, C, root*H, root*W), trong đó root = √num_images.
-    """
     # Nếu không truyền num_images, mặc định bằng độ dài của list_container
     if num_images is None:
         num_images = len(list_container)
@@ -232,22 +220,8 @@ def combine_torch_tensors_4d(list_container, num_images=None):
     return result
 
 # Chia một tensor lớn thành list n^2 tensor nhỏ (4 chiều)
-def split_torch_tensors_4d(parent_container_grid, grid_size=6):
-    """
-    Chia một tensor 4D (B, C, H_total, W_total) thành grid_size x grid_size patch nhỏ theo lưới.
-    
-    Output:
-      - Một list gồm grid_size * grid_size tensor, mỗi tensor có shape (B, C, patch_H, patch_W),
-        với patch_H = H_total // grid_size và patch_W = W_total // grid_size.
-    
-    Yêu cầu:
-      - H_total và W_total phải chia hết cho grid_size.
-    
-    Ví dụ:
-      - Nếu grid_size=6 (mặc định) => chia thành 36 patch (6x6).
-      - Nếu grid_size=3 => chia thành 9 patch (3x3).
-      - Nếu grid_size=2 => chia thành 4 patch (2x2).
-    """
+def split_torch_tensors_4d(parent_container_grid, num_child_images=4):
+    grid_size = int(math.sqrt(num_child_images))
     B, C, H_total, W_total = parent_container_grid.shape
 
     # Kiểm tra H_total và W_total có chia hết cho grid_size không
