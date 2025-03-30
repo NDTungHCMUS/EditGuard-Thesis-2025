@@ -750,6 +750,7 @@ class Model_VSN(BaseModel):
     def save(self, iter_label):
         self.save_network(self.netG, 'G', iter_label)
 
+    # ----- VN Start -----
     def embed(self, message = "0" * 64):
         self.netG.eval()
         messagenp = bit_string_to_messagenp(message, batch_size=1)
@@ -941,25 +942,4 @@ class Model_VSN(BaseModel):
         # self.netG.train()
 
         return recmessage, message
-    
-    def get_visuals(self, ref_L, real_H, fake_H, fake_H_h, forw_L, recmessage, message):
-        b, n, t, c, h, w = ref_L.shape
-        center = t // 2
-        intval = self.gop // 2
-        out_dict = OrderedDict()
-        LR_ref = ref_L[:, :, center - intval:center + intval + 1].detach()[0].float().cpu()
-        LR_ref = torch.chunk(LR_ref, self.num_image, dim=0)
-        out_dict['LR_ref'] = [image.squeeze(0) for image in LR_ref]
-        
-        if self.mode == "image":
-            out_dict['SR'] = fake_H.detach()[0].float().cpu()
-            SR_h = fake_H_h.detach()[0].float().cpu()
-            SR_h = torch.chunk(SR_h, self.num_image, dim=0)
-            out_dict['SR_h'] = [image.squeeze(0) for image in SR_h]
-        
-        out_dict['LR'] = forw_L.detach()[0].float().cpu()
-        out_dict['GT'] = real_H[:, center - intval:center + intval + 1].detach()[0].float().cpu()
-        out_dict['message'] = message
-        out_dict['recmessage'] = recmessage
-
-        return out_dict
+    # ----- VN End -----

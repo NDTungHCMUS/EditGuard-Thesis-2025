@@ -1,6 +1,7 @@
 from reedsolo import RSCodec, ReedSolomonError
 import random
 
+# ----- VN Start -----
 def binary_string_to_list_integer_16(binary_string):
     """
     Chuyển đổi chuỗi nhị phân thành danh sách các số nguyên, mỗi số biểu diễn 1 symbol 16 bit.
@@ -65,6 +66,7 @@ def recover_original(corrupted_bit_str):
         # decode trả về 3 giá trị: (decoded_message, corrected_codeword, errata_positions)
         decoded_message, corrected_codeword, _ = rs.decode(corrupted_symbols)
     except ReedSolomonError as e:
+        return -1
         raise ReedSolomonError("Không khôi phục được codeword: " + str(e))
     return list_integer_to_binary_string_16(corrected_codeword)
 
@@ -114,3 +116,5 @@ if __name__ == '__main__':
         # print("\nRecovery successful:", recovered_codeword == full_codeword)
     except ReedSolomonError as e:
         print("Recovery failed:", e)
+
+# ----- VN End -----

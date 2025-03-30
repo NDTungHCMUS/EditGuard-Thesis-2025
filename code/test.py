@@ -119,11 +119,19 @@ def main():
     # # random_walk_squeuence = random_walk_unique()
     # # print("RANDOM WALK:", random_walk_squeuence)
 
-    # ---- VN Start -----
+    # ----- VN Start -----
+    ## Explaination: Clear output files after run again
+    with open(opt['datasets']['TD']['copyright_output_without_correction'], 'w') as f:
+        pass
+    with open(opt['datasets']['TD']['copyright_output_with_correction'], 'w') as f:
+        pass
+    # ----- VN End -----
+
+    # ----- VN Start -----
     ## Explaination: Create copyright, metadata and corresponding parity
     list_dict_copyright_metadata = load_copyright_metadata_from_files(opt['datasets']['TD']['copyright_path'])
     list_dict_parity_copyright_metadata = compute_parity_from_list_copyright_metadata(list_dict_copyright_metadata)
-    # ---- VN End -----
+    # ----- VN End -----
     
     # ----- VN Start -----
     ## Explaination: Initialize neccessary variables
@@ -207,13 +215,13 @@ def main():
         copyright_before, copyright_after, metadata_before, metadata_after, cnt_cannot_solve = get_copyright_metadata_from_list_with_correction(list_message, list_recmessage)
         bit_error = write_extracted_messages(parent_image_id, copyright_before, copyright_after, metadata_before, metadata_after, opt['datasets']['TD']['copyright_output_with_correction'])
         bit_error_list_with_correction_code.append(bit_error)
-    # print("CANNOT SOLVE:", cnt_cannot_solve)
 
     avg_bit_error_without_correction = sum(bit_error_list_without_correction_code) / len(bit_error_list_without_correction_code)
     avg_bit_error_with_correction = sum(bit_error_list_with_correction_code) / len(bit_error_list_with_correction_code)
     print(f"Cannot Solve {cnt_cannot_solve} pairs among {num_images * num_child_images // 2} pairs")
     print(f"FINAL RESULT:\n BIT_ERR WITHOUT CORRECTION IS: {avg_bit_error_without_correction} \n BIT_ERR WITH REED-SOLOMON CORRECTION IS: {avg_bit_error_with_correction}")
 
+    # ----- VN End -----
 
         
     # img_dir = os.path.join('results',opt['name'])

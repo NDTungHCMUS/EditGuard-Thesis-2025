@@ -21,8 +21,12 @@ class imageTestDataset(data.Dataset):
         self.data_path = opt['data_path']
         self.bit_path = opt['bit_path']
         self.txt_path = self.opt['txt_path']
+
+        # ----- VN Start -----
         self.data_split_path = opt['split_path_ori']
         self.num_child_images = self.opt['num_child_images']
+        # ----- VN End -----
+        
         with open(self.txt_path) as f:
             self.list_image = f.readlines()
         self.list_image = [line.strip('\n') for line in self.list_image]
