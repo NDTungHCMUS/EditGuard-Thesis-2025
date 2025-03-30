@@ -49,7 +49,8 @@ datasets:
     split_path_con: ../dataset/valAGE-Set-10-eles-512px-split-con
     split_path_rec: ../dataset/valAGE-Set-10-eles-512px-split-rec
     merge_path: ../dataset/valAGE-Set-10-eles-512px-merge
-    copyright_output: ../dataset/copyright-10-eles-512px-output.txt
+    copyright_output_without_correction: ../dataset/copyright-10-eles-512px-output-without-correction.txt
+    copyright_output_with_correction: ../dataset/copyright-10-eles-512px-output-with-correction.txt
     # ------ VN End ------
 
     N_frames: 1

@@ -93,8 +93,8 @@ def bit_string_to_messagenp(bit_string, batch_size=1):
         message = np.tile(message, (batch_size, 1))
     return message
 
-## Explaination: Take copyright, metadata (before and after) from lists
-def get_copyright_metadata_from_list(list_message, list_recmessage):
+## Explaination: Take copyright, metadata (before and after) from lists (without correction)
+def get_copyright_metadata_from_list_without_correction(list_message, list_recmessage):
     copyright_before = list_message[0]
     copyright_after = list_recmessage[0]
     metadata_before = ""
@@ -104,6 +104,40 @@ def get_copyright_metadata_from_list(list_message, list_recmessage):
     for i in range(2, len(list_recmessage), 2):
         metadata_after = metadata_after + list_recmessage[i]
     return copyright_before, copyright_after, metadata_before, metadata_after
+
+## Explaination: Take copyright, metadata (before and after) from lists (with correction)
+def get_copyright_metadata_from_list_with_correction(list_message, list_recmessage):
+    copyright_before = list_message[0]
+    metadata_before = ""
+    for i in range(2, len(list_message), 2):
+        metadata_before = metadata_before + list_message[i]
+
+    num_child_images = len(list_message)
+    list_input_to_correct = []
+    # Build string to do reed-solomons
+    for i in range(0, num_child_images, 2):
+        list_input_to_correct.append(list_recmessage[i])
+    for i in range(1, num_child_images, 2):
+        list_input_to_correct[i//2] += list_recmessage[i]
+    print("LIST SOLOMON:", list_input_to_correct)
+
+    cnt_cannot_solve = 0
+    metadata_after = ""
+    for i in range(0, num_child_images // 2):
+        a = recover_original(str(list_input_to_correct[i]))
+        if (a == -1):
+            print("Cannot solve Reed Solomon")
+            cnt_cannot_solve += 1
+            if (i == 0):
+                copyright_after = copyright_before
+            else:
+                metadata_after = metadata_after + list_input_to_correct[:64]
+        else: 
+            if (i == 0):
+                copyright_after = a[:64]
+            else:
+                metadata_after = metadata_after + a[:64]
+    return copyright_before, copyright_after, metadata_before, metadata_after, cnt_cannot_solve
 
 ## Explaination: Convert tensor to binary string
 def tensor_to_binary_string(tensor):

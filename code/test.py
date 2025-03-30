@@ -18,9 +18,8 @@ import numpy as np
 # ----- VN Start -----
 ## Explaination: Import library
 from utils.random_walk import random_walk_unique
-from utils.my_util import load_copyright_metadata_from_files, tensor_to_binary_string, compute_parity_from_list_copyright_metadata, compute_message, get_copyright_metadata_from_list, split_all_images, combine_torch_tensors_4d, split_torch_tensors_4d, write_extracted_messages
+from utils.my_util import load_copyright_metadata_from_files, tensor_to_binary_string, compute_parity_from_list_copyright_metadata, compute_message, get_copyright_metadata_from_list_with_correction, get_copyright_metadata_from_list_without_correction, split_all_images, combine_torch_tensors_4d, split_torch_tensors_4d, write_extracted_messages
 from utils.reed_solomons import compute_parity, recover_original
-import global_variables
 # ------ VN End ------
 
 def init_dist(backend='nccl', **kwargs):
@@ -100,7 +99,6 @@ def main():
     split_all_images(input_folder = opt['datasets']['TD']['data_path'], output_folder = opt['datasets']['TD']['split_path_ori'], num_child_images = opt['datasets']['TD']['num_child_images'], num_images = opt['datasets']['TD']['num_images'])
     # ----- VN End -----
 
-
     # Create train and val dataloader
     dataset_ratio = 200  # Enlarge the size of each epoch
     for phase, dataset_opt in opt['datasets'].items():
@@ -130,6 +128,7 @@ def main():
     # ----- VN Start -----
     ## Explaination: Initialize neccessary variables
     cnt_cannot_solve = 0
+    num_images = opt['datasets']['TD']['num_images']
     num_child_images = opt['datasets']['TD']['num_child_images']
     bit_error_list_without_correction_code = []
     bit_error_list_with_correction_code = []
@@ -200,31 +199,20 @@ def main():
           list_recmessage[i] = tensor_to_binary_string(list_recmessage[i])
         
         # Step 5.2: Get copyright (before, after), metadata (before, after) from list_message, list_recmessage
-        copyright_before, copyright_after, metadata_before, metadata_after = get_copyright_metadata_from_list(list_message, list_recmessage)
-        bit_error = write_extracted_messages(parent_image_id, copyright_before, copyright_after, metadata_before, metadata_after, opt['datasets']['TD']['copyright_output'])
+        copyright_before, copyright_after, metadata_before, metadata_after = get_copyright_metadata_from_list_without_correction(list_message, list_recmessage)
+        bit_error = write_extracted_messages(parent_image_id, copyright_before, copyright_after, metadata_before, metadata_after, opt['datasets']['TD']['copyright_output_without_correction'])
         bit_error_list_without_correction_code.append(bit_error)
 
         # Step 6: Try to fix base on Reed-Solomons        
-        list_input_to_correct = []
-        list_recmessage_fix = []
-        # Build string to do reed-solomons
-        for i in range(0, num_child_images, 2):
-          list_input_to_correct.append(list_recmessage[i])
-        for i in range(1, num_child_images, 2):
-          list_input_to_correct[i//2] += list_recmessage[i]
-        print("LIST SOLOMON:", list_input_to_correct)
-        for i in range(0, num_child_images // 2):
-          a = recover_original(str(list_input_to_correct[i]))
-          print("DA CORRECT:", a)
-          if (a == -1):
-            cnt_cannot_solve += 1
-          else:
-            list_recmessage_fix.append(a[:64])
-            list_recmessage_fix.append(a[64:])
-        # write_extracted_messages(parent_image_id, list_message, list_recmessage_fix, opt['datasets']['TD']['copyright_output_fix'])
-
+        copyright_before, copyright_after, metadata_before, metadata_after, cnt_cannot_solve = get_copyright_metadata_from_list_with_correction(list_message, list_recmessage)
+        bit_error = write_extracted_messages(parent_image_id, copyright_before, copyright_after, metadata_before, metadata_after, opt['datasets']['TD']['copyright_output_with_correction'])
+        bit_error_list_with_correction_code.append(bit_error)
     # print("CANNOT SOLVE:", cnt_cannot_solve)
 
+    avg_bit_error_without_correction = sum(bit_error_list_without_correction_code) / len(bit_error_list_without_correction_code)
+    avg_bit_error_with_correction = sum(bit_error_list_with_correction_code) / len(bit_error_list_with_correction_code)
+    print(f"Cannot Solve {cnt_cannot_solve} pairs among {num_images * num_child_images // 2} pairs")
+    print(f"FINAL RESULT:\n BIT_ERR WITHOUT CORRECTION IS: {avg_bit_error_without_correction} \n BIT_ERR WITH REED-SOLOMON CORRECTION IS: {avg_bit_error_with_correction}")
 
 
         
