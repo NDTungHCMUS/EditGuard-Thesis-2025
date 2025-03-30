@@ -45,7 +45,7 @@ def split_and_save_image_torch(image_path, output_folder="images", num_child_ima
 
     print(f"Đã lưu {count} ảnh vào thư mục {output_folder}")
 
-def split_all_images(input_folder="A", output_folder="B", num_child_images = 4):
+def split_all_images(input_folder="A", output_folder="B", num_child_images = 4, num_images = 10):
     """
     Duyệt qua tất cả các ảnh trong thư mục input_folder, chia nhỏ và lưu vào output_folder.
 
@@ -55,14 +55,23 @@ def split_all_images(input_folder="A", output_folder="B", num_child_images = 4):
     """
     os.makedirs(output_folder, exist_ok=True)  # Đảm bảo thư mục đầu ra tồn tại
 
-    for filename in os.listdir(input_folder):
-        if filename.lower().endswith((".png", ".jpg", ".jpeg")):
-            img_path = os.path.join(input_folder, filename)
-            img_name, _ = os.path.splitext(filename)  # Lấy tên file không có đuôi
-            save_dir = os.path.join(output_folder, img_name)  # Tạo thư mục riêng cho ảnh
-            os.makedirs(save_dir, exist_ok=True)
-
-            split_and_save_image_torch(img_path, save_dir, num_child_images = num_child_images)
+     # Lấy danh sách các file, sắp xếp theo thứ tự tăng dần dựa trên tên file
+    files = sorted(os.listdir(input_folder))
+    
+    image_files = [f for f in files if f.lower().endswith((".png", ".jpg", ".jpeg"))]
+    
+    if num_images is not None:
+        image_files = image_files[:num_images]
+    
+    # Duyệt qua các file ảnh đã sắp xếp
+    for filename in image_files:
+        img_path = os.path.join(input_folder, filename)
+        img_name, _ = os.path.splitext(filename)  # Lấy tên file không có đuôi
+        save_dir = os.path.join(output_folder, img_name)  # Tạo thư mục riêng cho ảnh
+        os.makedirs(save_dir, exist_ok=True)
+        
+        # Gọi hàm split (giả sử hàm này đã được định nghĩa)
+        split_and_save_image_torch(img_path, save_dir, num_child_images=num_child_images)
 
 # split_and_save_image_torch("input.jpg") 
 

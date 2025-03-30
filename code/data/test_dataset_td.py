@@ -8,6 +8,10 @@ import random
 import numpy as np
 from PIL import Image
 
+# ----- VN Start -----
+import global_variables
+# ----- VN End -----
+
 class imageTestDataset(data.Dataset):
 
     def __init__(self, opt):
@@ -38,7 +42,15 @@ class imageTestDataset(data.Dataset):
         img_GT = util.read_img(None, osp.join(parent_path_GT, f"{index}.png"))
         img_GT = img_GT[:, :, [2, 1, 0]]
         img_GT = torch.from_numpy(np.ascontiguousarray(np.transpose(img_GT, (2, 0, 1)))).float().unsqueeze(0)
+
+        # ----- VN Start -----
+        ## Explaination: Resize Image
+        width = global_variables.TEST_CONFIG['datasets']['TD']['width']
+        height = global_variables.TEST_CONFIG['datasets']['TD']['height']
+        img_GT = torch.nn.functional.interpolate(img_GT, size=(width, height), mode='nearest', align_corners=None)
+        ## ----- ORIGINAL -----
         # img_GT = torch.nn.functional.interpolate(img_GT, size=(512, 512), mode='nearest', align_corners=None)
+        # ----- VN End -----
 
         T, C, W, H = img_GT.shape
         list_h = []

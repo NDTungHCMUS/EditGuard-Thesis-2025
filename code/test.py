@@ -14,11 +14,16 @@ from utils import util
 from data import create_dataloader, create_dataset
 from models import create_model
 import numpy as np
+
+# ----- VN Start -----
+## Explaination: Import library
 from utils.image_handler import split_all_images, combine_images_from_folder, combine_torch_tensors_4d, split_torch_tensors_4d, save_tensor_images, write_extracted_messages
 from utils.random_walk import random_walk_unique
-from utils.preprocess import load_pairs_from_file, load_copyright_metadata_from_files, tensor_to_binary_string, compute_parity_from_list_copyright_metadata
+from utils.preprocess import load_pairs_from_file, load_copyright_metadata_from_files, tensor_to_binary_string, compute_parity_from_list_copyright_metadata, compute_message
 from utils.mapping import create_list_data
 from utils.reed_solomons import compute_parity, recover_original
+import global_variables
+# ------ VN End ------
 
 def init_dist(backend='nccl', **kwargs):
     ''' initialization for distributed training'''
@@ -94,7 +99,7 @@ def main():
 
     # ----- VN Start -----
     ## Explaination: Split images into n^2 sub-images (comment if already done)
-    split_all_images(input_folder = opt['datasets']['TD']['data_path'], output_folder = opt['datasets']['TD']['split_path_ori'], num_child_images = opt['datasets']['TD']['num_child_images'])
+    split_all_images(input_folder = opt['datasets']['TD']['data_path'], output_folder = opt['datasets']['TD']['split_path_ori'], num_child_images = opt['datasets']['TD']['num_child_images'], num_images = opt['datasets']['TD']['num_images'])
     # ----- VN End -----
 
 
@@ -125,42 +130,42 @@ def main():
 
     # ---- VN Start -----
     ## Explaination: Create copyright, metadata and corresponding parity
-    list_copyright_metadata = load_copyright_metadata_from_files(opt['datasets']['TD']['copyright_path'])
-    list_parity_copyright_metadata = compute_parity_from_list_copyright_metadata(list_copyright_metadata)
+    list_dict_copyright_metadata = load_copyright_metadata_from_files(opt['datasets']['TD']['copyright_path'])
+    list_dict_parity_copyright_metadata = compute_parity_from_list_copyright_metadata(list_dict_copyright_metadata)
     # ---- VN End -----
     
-    # cnt_cannot_solve = 0
-    # for parent_image_id, val_data in enumerate(val_loader):
-    #     # img_dir = os.path.join('results',opt['name'])
-    #     # util.mkdir(img_dir)
+    # ----- VN Start -----
+    cnt_cannot_solve = 0
+    num_child_images = opt['datasets']['TD']['num_child_images']
+    for parent_image_id, val_data in enumerate(val_loader):
+        # img_dir = os.path.join('results',opt['name'])
+        # util.mkdir(img_dir)
 
-    #     # Step 1: Embed data into images
-    #     list_container = []
-    #     list_ref_L = []
-    #     list_real_H = []
-    #     list_messageTensor = []
-    #     for i in range(0, n * n):
-    #         child_data = {
-    #             'LQ': val_data['LQ'][i].unsqueeze(0),
-    #             'GT': val_data['GT'][i].unsqueeze(0)
-    #         }
-    #         # print("Child Data of parent: {parent_image_id}, child: {i} is:", child_data)
-    #         # print("Shape LQ of Child Data:", child_data['LQ'].shape)
-    #         # print("Shape GT of Child Data:", child_data['GT'].shape)
-    #         model.feed_data(child_data)
-    #         list_ref_L.append(model.ref_L)
-    #         list_real_H.append(model.real_H)
-    #         if (i % 2 == 0):
-    #           message = list_copyright[i//2]
-    #         else:
-    #           message = list_parity[i//2]
-    #         I_container, messageTensor = model.embed(message)
-    #         list_messageTensor.append(messageTensor)
-    #         print("MESSAGE:",message)
-    #         list_container.append(I_container)
+        # Step 1: Embed data into images
+        list_container = []
+        list_messageTensor = []
+        for i in range(0, num_child_images):
+            child_data = {
+                'LQ': val_data['LQ'][i].unsqueeze(0),
+                'GT': val_data['GT'][i].unsqueeze(0)
+            }
+            # print("Child Data of parent: {parent_image_id}, child: {i} is:", child_data)
+            # print("Shape LQ of Child Data:", child_data['LQ'].shape)
+            # print("Shape GT of Child Data:", child_data['GT'].shape)
+            # model.feed_data(child_data)
+            message = compute_message(i, list_dict_copyright_metadata[parent_image_id], list_dict_parity_copyright_metadata[parent_image_id])
+            # I_container, messageTensor = model.embed(message)
+            # list_messageTensor.append(messageTensor)
+            # list_container.append(I_container)
+            print(f"MESSAGE: of child {i}, parent {parent_image_id}:",message)
 
-    #     # Step 1.1: Save n^2 images to folder
-    #     # save_tensor_images(list_container, parent_image_id, opt['datasets']['TD']['split_path_con'])
+        # Step 1.1: Save n^2 images to folder
+        for i in range(len(list_container)):
+            child_container_img = util.tensor2img(list_container[i].detach()[0].float().cpu())
+            folder_name = str(parent_image_id + 1).zfill(4)
+            output_folder = os.path.join(opt['datasets']['TD']['split_path_con'], folder_name)
+            save_img_path = os.path.join(output_folder,f'{str(i).zfill(4)}.png')
+            util.save_img(child_container_img, save_img_path)
 
     #     # Step 2: Combine n^2 images into one (4 dimensions)
     #     parent_container = combine_torch_tensors_4d(list_container, num_images = n * n)

@@ -51,6 +51,15 @@ def compute_parity_from_list_copyright_metadata(list_copyright_metadata):
         result.append(parity_data)
     return result
 
+def compute_message(index, dict_copyright_metadata, dict_parity_copyright_metadata):
+    if (index == 0):
+        return dict_copyright_metadata['copyright']
+    elif (index == 1):
+        return dict_parity_copyright_metadata['copyright']
+    elif (index % 2 == 0):
+        return dict_copyright_metadata['metadata'][index // 2 - 1]
+    return dict_parity_copyright_metadata['metadata'][index // 2 - 1]
+
 def load_pairs_from_file(file_path):
     """
     Đọc file nhị phân, mỗi cặp (copyright, metadata) sẽ được lưu vào danh sách.

@@ -34,6 +34,10 @@ from diffusers import StableDiffusionXLInpaintPipeline
 from diffusers.utils import load_image
 from diffusers import RePaintPipeline, RePaintScheduler
 
+# ----- VN Start -----
+import global_variables
+# ----- VN End -----
+
 class Model_VSN(BaseModel):
     def __init__(self, opt):
         super(Model_VSN, self).__init__(opt)
@@ -797,9 +801,14 @@ class Model_VSN(BaseModel):
 
                 for j in range(b):
                     i = image_id + 1
-                    masksrc = "../dataset/valAGE-Set-Mask-10-eles-1024px/"
+                    masksrc = "../dataset/valAGE-Set-Mask/"
                     mask_image = Image.open(masksrc + str(i).zfill(4) + ".png").convert("L")
+
+                    # ----- VN Start -----
+                    mask_image = mask_image.resize((global_variables.TEST_CONFIG['datasets']['TD']['width'], global_variables.TEST_CONFIG['datasets']['TD']['height']))
+                    ## ----- ORIGINAL -----
                     # mask_image = mask_image.resize((512, 512))
+                    # ----- VN End ------
                     h, w = mask_image.size
                     
                     image = image_batch[j, :, :, :]
