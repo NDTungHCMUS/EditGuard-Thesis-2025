@@ -135,7 +135,7 @@ def main():
     
     # ----- VN Start -----
     ## Explaination: Initialize neccessary variables
-    cnt_cannot_solve = 0
+    cnt_cannot_solve_all = 0
     num_images = opt['datasets']['TD']['num_images']
     num_child_images = opt['datasets']['TD']['num_child_images']
     bit_error_list_without_correction_code = []
@@ -215,10 +215,11 @@ def main():
         copyright_before, copyright_after, metadata_before, metadata_after, cnt_cannot_solve = get_copyright_metadata_from_list_with_correction(list_message, list_recmessage)
         bit_error = write_extracted_messages(parent_image_id, copyright_before, copyright_after, metadata_before, metadata_after, opt['datasets']['TD']['copyright_output_with_correction'])
         bit_error_list_with_correction_code.append(bit_error)
+        cnt_cannot_solve_all += cnt_cannot_solve
 
     avg_bit_error_without_correction = sum(bit_error_list_without_correction_code) / len(bit_error_list_without_correction_code)
     avg_bit_error_with_correction = sum(bit_error_list_with_correction_code) / len(bit_error_list_with_correction_code)
-    print(f"Cannot Solve {cnt_cannot_solve} pairs among {num_images * num_child_images // 2} pairs")
+    print(f"Cannot Solve {cnt_cannot_solve_all} pairs among {num_images * num_child_images // 2} pairs")
     print(f"FINAL RESULT:\n BIT_ERR WITHOUT CORRECTION IS: {avg_bit_error_without_correction} \n BIT_ERR WITH REED-SOLOMON CORRECTION IS: {avg_bit_error_with_correction}")
 
     # ----- VN End -----
