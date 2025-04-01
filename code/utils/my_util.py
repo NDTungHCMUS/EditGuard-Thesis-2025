@@ -131,7 +131,7 @@ def get_copyright_metadata_from_list_with_correction(list_message, list_recmessa
             if (i == 0):
                 copyright_after = copyright_before
             else:
-                metadata_after = metadata_after + list_input_to_correct[:64]
+                metadata_after = metadata_after + list_input_to_correct[i][:64]
         else: 
             if (i == 0):
                 copyright_after = a[:64]
