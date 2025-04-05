@@ -1,7 +1,7 @@
+# ----- VN Start -----
 from reedsolo import RSCodec, ReedSolomonError
 import random
 
-# ----- VN Start -----
 def binary_string_to_list_integer_16(binary_string):
     """
     Chuyển đổi chuỗi nhị phân thành danh sách các số nguyên, mỗi số biểu diễn 1 symbol 16 bit.

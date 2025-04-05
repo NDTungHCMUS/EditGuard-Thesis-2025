@@ -1,3 +1,4 @@
+# ----- VN Start -----
 import numpy as np
 import torch
 import torchvision.transforms.functional as TF
@@ -7,7 +8,6 @@ import math
 from .reed_solomons import compute_parity, recover_original
 from .util import save_img, tensor2img, decoded_message_error_rate
 
-# ----- VN Start -----
 ## Explaination: Load copyright and metadata from file -> Return list of dictionary ({'copyright': str, 'metadata': list})
 def load_copyright_metadata_from_files(file_path):
     results = []

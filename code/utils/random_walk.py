@@ -1,3 +1,4 @@
+# ----- VN Start -----
 import random
 
 def random_walk_unique(n=21, min_val=1, max_val=31):
@@ -28,3 +29,4 @@ def random_walk_unique(n=21, min_val=1, max_val=31):
             numbers.append(next_num)
     numbers.insert(0, 0)
     return numbers  # Trả về danh sách số nguyên thay vì chuỗi nhị phân
+# ----- VN End -----

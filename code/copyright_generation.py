@@ -1,6 +1,7 @@
+# ----- VN Start -----
 import random
 import global_variables
-# ----- VN Start -----
+
 def generate_dataset(num_images, num_strings_per_image, output_filename="../dataset/copyrights-10-eles.txt"):
     lines = []
     for i in range(1, num_images + 1):
