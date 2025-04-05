@@ -33,6 +33,12 @@ bitrecord: False
 
 mode: image
 
+# ----- VN START -----
+#### results
+
+result_path: "results/ori_result.txt"
+# ----- VN END -----
+
 #### datasets
 
 datasets:
@@ -54,6 +60,10 @@ datasets:
     merge_path: ../dataset/valAGE-Set-10-eles-512px-merge
     copyright_output_without_correction: ../dataset/copyright-10-eles-512px-output-without-correction.txt
     copyright_output_with_correction: ../dataset/copyright-10-eles-512px-output-with-correction.txt
+    # ----- ORIGINAL -----
+    # num_images: 1
+    # data_path: ../dataset/valAGE-Set
+    # txt_path:  ../dataset/sep_testlist.txt
     # ------ VN End ------
 
     N_frames: 1

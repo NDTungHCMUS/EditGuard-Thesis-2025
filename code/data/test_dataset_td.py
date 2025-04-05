@@ -21,6 +21,7 @@ class imageTestDataset(data.Dataset):
         self.data_path = opt['data_path']
         self.bit_path = opt['bit_path']
         self.txt_path = self.opt['txt_path']
+        self.num_image = self.opt['num_image']
 
         # ----- VN Start -----
         self.data_split_path = opt['split_path_ori']
@@ -41,6 +42,8 @@ class imageTestDataset(data.Dataset):
         parent_index = index // self.num_child_images
         index = index % self.num_child_images
         parent_path_GT = osp.join(self.data_split_path, self.image_list_gt[parent_index])
+        # ----- ORIGINAL -----
+        # path_GT = self.image_list_gt[index]
         # ----- VN End -----
 
         img_GT = util.read_img(None, osp.join(parent_path_GT, f"{index}.png"))
@@ -83,4 +86,6 @@ class imageTestDataset(data.Dataset):
     def __len__(self):
         # ----- VN Start -----
         return len(self.image_list_gt * self.num_child_images)  
+        # ----- ORIGINAL -----
+        # return len(self.image_list_gt)
         # ----- VN End -----

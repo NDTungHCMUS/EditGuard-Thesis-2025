@@ -96,7 +96,10 @@ def main():
 
     # ----- VN Start -----
     ## Explaination: Split images into n^2 sub-images (comment if already done)
-    split_all_images(input_folder = opt['datasets']['TD']['data_path'], output_folder = opt['datasets']['TD']['split_path_ori'], num_child_images = opt['datasets']['TD']['num_child_images'], num_images = opt['datasets']['TD']['num_images'])
+    split_all_images(input_folder = opt['datasets']['TD']['data_path'],
+                     output_folder = opt['datasets']['TD']['split_path_ori'],
+                     num_child_images = opt['datasets']['TD']['num_child_images'],
+                     num_images = opt['datasets']['TD']['num_images'])
     # ----- VN End -----
 
     # Create train and val dataloader
@@ -222,9 +225,7 @@ def main():
     print(f"Cannot Solve {cnt_cannot_solve_all} pairs among {num_images * num_child_images // 2} pairs")
     print(f"FINAL RESULT:\n BIT_ERR WITHOUT CORRECTION IS: {avg_bit_error_without_correction} \n BIT_ERR WITH REED-SOLOMON CORRECTION IS: {avg_bit_error_with_correction}")
 
-    # ----- VN End -----
-
-        
+    # ----- ORIGINAL -----
     # img_dir = os.path.join('results',opt['name'])
         # util.mkdir(img_dir)
     # # validation
@@ -308,6 +309,8 @@ def main():
     # # for p in avg_psnr_h:
     # #     res_psnr_h+=('_{:.4e}'.format(p))
     # # print('# Validation # PSNR_Cover: {:.4e}, PSNR_Secret: {:s}, PSNR_Stego: {:.4e},  Bit_Error: {:.4e}'.format(avg_psnr, res_psnr_h, avg_psnr_lr, avg_biterr))
+
+    # ----- VN End -----
 
 
 if __name__ == '__main__':
