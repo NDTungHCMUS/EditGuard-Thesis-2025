@@ -19,7 +19,7 @@ import numpy as np
 ## Explaination: Import library
 from utils.random_walk import random_walk_unique
 from utils.my_util import load_copyright_metadata_from_files, tensor_to_binary_string, compute_parity_from_list_copyright_metadata, compute_message, get_copyright_metadata_from_list_with_correction, get_copyright_metadata_from_list_without_correction, split_all_images, combine_torch_tensors_4d, split_torch_tensors_4d, write_extracted_messages
-from utils.reed_solomons import compute_parity, recover_original
+from code.utils.reed_solomons_16 import compute_parity, recover_original
 # ------ VN End ------
 
 def init_dist(backend='nccl', **kwargs):
@@ -132,8 +132,9 @@ def main():
 
     # ----- VN Start -----
     ## Explaination: Create copyright, metadata and corresponding parity
+    type_correction_code = opt['type_correction_code']
     list_dict_copyright_metadata = load_copyright_metadata_from_files(opt['datasets']['TD']['copyright_path'])
-    list_dict_parity_copyright_metadata = compute_parity_from_list_copyright_metadata(list_dict_copyright_metadata)
+    list_dict_parity_copyright_metadata = compute_parity_from_list_copyright_metadata(list_dict_copyright_metadata, type_correction_code = type_correction_code)
     # ----- VN End -----
     
     # ----- VN Start -----
@@ -215,15 +216,22 @@ def main():
         bit_error_list_without_correction_code.append(bit_error)
 
         # Step 6: Try to fix base on Reed-Solomons        
-        copyright_before, copyright_after, metadata_before, metadata_after, cnt_cannot_solve = get_copyright_metadata_from_list_with_correction(list_message, list_recmessage)
+        copyright_before, copyright_after, metadata_before, metadata_after, cnt_cannot_solve = get_copyright_metadata_from_list_with_correction(list_message, list_recmessage, type_correction_code = type_correction_code)
         bit_error = write_extracted_messages(parent_image_id, copyright_before, copyright_after, metadata_before, metadata_after, opt['datasets']['TD']['copyright_output_with_correction'])
         bit_error_list_with_correction_code.append(bit_error)
         cnt_cannot_solve_all += cnt_cannot_solve
 
     avg_bit_error_without_correction = sum(bit_error_list_without_correction_code) / len(bit_error_list_without_correction_code)
     avg_bit_error_with_correction = sum(bit_error_list_with_correction_code) / len(bit_error_list_with_correction_code)
+
+    # PRINT RESULT
     print(f"Cannot Solve {cnt_cannot_solve_all} pairs among {num_images * num_child_images // 2} pairs")
-    print(f"FINAL RESULT:\n BIT_ERR WITHOUT CORRECTION IS: {avg_bit_error_without_correction} \n BIT_ERR WITH REED-SOLOMON CORRECTION IS: {avg_bit_error_with_correction}")
+    algo_type = "REED-SOLOMON 16"
+    if (type_correction_code == 2):
+        algo_type = "REED-SOLOMON 8"
+    elif (type_correction_code == 3):
+        algo_type = "HAMMING-CODE 74"
+    print(f"FINAL RESULT:\n BIT_ERR WITHOUT CORRECTION IS: {avg_bit_error_without_correction} \n BIT_ERR WITH {algo_type} CORRECTION METHOD IS: {avg_bit_error_with_correction}")
 
     # ----- ORIGINAL -----
     # img_dir = os.path.join('results',opt['name'])

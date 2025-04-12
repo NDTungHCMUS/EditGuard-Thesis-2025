@@ -5,7 +5,9 @@ import torchvision.transforms.functional as TF
 from PIL import Image
 import os
 import math
-from .reed_solomons import compute_parity, recover_original
+from .reed_solomons_16 import compute_parity_16, recover_original_16
+from .reed_solomons_8 import compute_parity_8, recover_original_8
+from .hamming_code import compute_parity_hamming_74, recover_original_hamming_74
 from .util import save_img, tensor2img, decoded_message_error_rate
 
 ## Explaination: Load copyright and metadata from file -> Return list of dictionary ({'copyright': str, 'metadata': list})
@@ -47,15 +49,30 @@ def load_copyright_metadata_from_files(file_path):
     return results
 
 ## Explaination: Compute correction code for copyright and metadata -> Return list of dictionary ({'copyright': str, 'metadata': list})
-def compute_parity_from_list_copyright_metadata(list_copyright_metadata):
+def compute_parity_from_list_copyright_metadata(list_copyright_metadata, type_correction_code = 1):
     result = []
     for i in range(len(list_copyright_metadata)):
+        if (type_correction_code == 1):
+            copyright = compute_parity_16(list_copyright_metadata[i]["copyright"])
+        elif (type_correction_code == 2):
+            copyright = compute_parity_8(list_copyright_metadata[i]["copyright"])
+        elif (type_correction_code == 3):
+            copyright = compute_parity_hamming_74(list_copyright_metadata[i]["copyright"])
+        else:
+            copyright = "0" * 64
         parity_data = {
-            "copyright": compute_parity(list_copyright_metadata[i]["copyright"]),
+            "copyright": copyright,
             "metadata": []
         }
         for metadata in list_copyright_metadata[i]["metadata"]:
-            parity_metadata = compute_parity(metadata)
+            if (type_correction_code == 1):
+                parity_metadata = compute_parity_16(metadata)
+            elif (type_correction_code == 2):
+                parity_metadata = compute_parity_8(metadata)
+            elif (type_correction_code == 3):
+                parity_metadata = compute_parity_hamming_74(metadata)
+            else:
+                parity_metadata = "0" * 64
             parity_data["metadata"].append(parity_metadata)
         result.append(parity_data)
     return result
@@ -106,7 +123,7 @@ def get_copyright_metadata_from_list_without_correction(list_message, list_recme
     return copyright_before, copyright_after, metadata_before, metadata_after
 
 ## Explaination: Take copyright, metadata (before and after) from lists (with correction)
-def get_copyright_metadata_from_list_with_correction(list_message, list_recmessage):
+def get_copyright_metadata_from_list_with_correction(list_message, list_recmessage, type_correction_code = 1):
     copyright_before = list_message[0]
     metadata_before = ""
     for i in range(2, len(list_message), 2):
@@ -124,7 +141,14 @@ def get_copyright_metadata_from_list_with_correction(list_message, list_recmessa
     cnt_cannot_solve = 0
     metadata_after = ""
     for i in range(0, num_child_images // 2):
-        a = recover_original(str(list_input_to_correct[i]))
+        if (type_correction_code == 1):
+            a = recover_original_16(list_input_to_correct[i])
+        elif (type_correction_code == 2):
+            a = recover_original_8(list_input_to_correct[i])
+        elif (type_correction_code == 3):
+            a = recover_original_hamming_74(list_input_to_correct[i])
+        else:
+            a = -1
         if (a == -1):
             print("Cannot solve Reed Solomon")
             cnt_cannot_solve += 1
@@ -311,16 +335,21 @@ def write_extracted_messages(parent_image_id, copyright_before,
     Ghi ra file thông tin trích xuất cho một ảnh với định dạng:
     
     Image_ID: <parent_image_id, định dạng 4 chữ số>
-    Copyright Before: <dãy 64 bit>
-    Copyright After: <dãy 64 bit>
-    Copyright_Bit_Error: <số bit khác nhau giữa copyright trước và sau chia cho 64>
-    Copyright_Wrong_Position: <list các vị trí khác nhau>
-    Metadata Before: <dãy metadata, mỗi 64 bit cách nhau bởi dấu |>
-    Metadata After: <dãy metadata, mỗi 64 bit cách nhau bởi dấu |>
-    Metadata_Bit_Error: <số bit khác nhau giữa metadata trước và sau chia cho tổng số bit>
-    Metadata_Wrong_Position: <list các vị trí khác nhau>
-    General_Bit_Error: <số bit khác nhau trong toàn bộ dãy (copyright + metadata) chia cho tổng số bit>
-    ---------------------
+    Copyright Length: <số bit trong chuỗi copyright (64)>
+        Copyright Before: <dãy 64 bit>
+        Copyright After: <dãy 64 bit>
+        Copyright Bit Error: <số bit khác nhau giữa copyright trước và sau chia cho 64>
+        Copyright Wrong Position: <list các vị trí khác nhau>
+    Metadata Length: <số bit trong metadata>
+        Metadata Before: <dãy metadata, mỗi 64 bit cách nhau bởi dấu |>
+        Metadata After: <dãy metadata, mỗi 64 bit cách nhau bởi dấu |>
+        Metadata Bit Error: <số bit khác nhau giữa metadata trước và sau chia cho tổng số bit metadata>
+        Metadata Wrong Position: <list các vị trí khác nhau>
+        General Bit Length: <tổng số bit trong (copyright + metadata)>
+        General Bit Before: <dãy (copyright + metadata) trước được chia theo 64-bit với dấu |>
+        General Bit After: <dãy (copyright + metadata) sau được chia theo 64-bit với dấu |>
+        General Bit Error: <số bit khác nhau trong toàn bộ dãy chia cho tổng số bit>
+    General Wrong Position: <list các vị trí khác nhau trong toàn bộ dãy>
     
     Args:
         parent_image_id (int): Số nhận dạng ảnh gốc (0, 1, 2, ...).
@@ -333,56 +362,72 @@ def write_extracted_messages(parent_image_id, copyright_before,
     Returns:
         float: Giá trị general_bit_error.
     """
-    # Định dạng parent_image_id thành chuỗi 4 chữ số
+    # Format parent image id thành chuỗi 4 chữ số.
     image_id_str = f"{parent_image_id:04d}"
     
-    # Kiểm tra độ dài của copyright và metadata
+    # Kiểm tra độ dài của copyright và metadata.
     if len(copyright_before) != 64 or len(copyright_after) != 64:
         raise ValueError("Copyright trước và sau phải có đúng 64 bit.")
     
     if len(metadata_before) % 64 != 0 or len(metadata_after) % 64 != 0:
         raise ValueError("Metadata trước và sau phải là bội số của 64 bit.")
     
-    # Tính bit error cho copyright
+    # Tính toán lỗi bit cho copyright.
     copyright_diff_positions = [i for i in range(64) 
                                 if copyright_before[i] != copyright_after[i]]
     copyright_diff_count = len(copyright_diff_positions)
     copyright_bit_error = copyright_diff_count / 64
     
-    # Tính bit error cho metadata
+    # Tính toán lỗi bit cho metadata.
     metadata_len = len(metadata_before)
     metadata_diff_positions = [i for i in range(metadata_len)
                                if metadata_before[i] != metadata_after[i]]
     metadata_diff_count = len(metadata_diff_positions)
     metadata_bit_error = metadata_diff_count / metadata_len
     
-    # Tính general bit error cho toàn bộ dãy (copyright + metadata)
+    # Tính toán lỗi bit cho toàn bộ dãy (copyright + metadata).
     combined_before = copyright_before + metadata_before
     combined_after = copyright_after + metadata_after
     combined_length = len(combined_before)  # = 64 + metadata_len
-    combined_diff_count = sum(1 for i in range(combined_length)
-                              if combined_before[i] != combined_after[i])
+    general_diff_positions = [i for i in range(combined_length)
+                              if combined_before[i] != combined_after[i]]
+    combined_diff_count = len(general_diff_positions)
     general_bit_error = combined_diff_count / combined_length
 
-    # Format metadata: chia thành các block 64 bit cách nhau bởi dấu "|"
-    def format_metadata(md):
-        return " | ".join([md[i:i+64] for i in range(0, len(md), 64)])
+    # Helper function: format bit string in blocks of 64 separated by " | "
+    def format_in_blocks(bit_str, block_size=64):
+        return " | ".join([bit_str[i:i+block_size] for i in range(0, len(bit_str), block_size)])
     
-    metadata_before_formatted = format_metadata(metadata_before)
-    metadata_after_formatted = format_metadata(metadata_after)
+    # Format metadata and general bit strings.
+    metadata_before_formatted = format_in_blocks(metadata_before)
+    metadata_after_formatted  = format_in_blocks(metadata_after)
+    general_before_formatted  = format_in_blocks(combined_before)
+    general_after_formatted   = format_in_blocks(combined_after)
     
-    # Ghi thông tin ra file
+    # Ghi thông tin ra file theo định dạng mới.
     with open(out_file_path, 'a') as f:
         f.write(f"Image_ID: {image_id_str}\n")
-        f.write(f"Copyright Before: {copyright_before}\n")
-        f.write(f"Copyright After: {copyright_after}\n")
-        f.write(f"Copyright_Bit_Error: {copyright_bit_error}\n")
-        f.write(f"Copyright_Wrong_Position: {copyright_diff_positions}\n")
-        f.write(f"Metadata Before: {metadata_before_formatted}\n")
-        f.write(f"Metadata After: {metadata_after_formatted}\n")
-        f.write(f"Metadata_Bit_Error: {metadata_bit_error}\n")
-        f.write(f"Metadata_Wrong_Position: {metadata_diff_positions}\n")
-        f.write(f"General_Bit_Error: {general_bit_error}\n")
+        
+        # Copyright block
+        f.write("Copyright Length: 64\n")
+        f.write(f"    Copyright Before: {copyright_before}\n")
+        f.write(f"    Copyright After: {copyright_after}\n")
+        f.write(f"    Copyright Bit Error: {copyright_bit_error}\n")
+        f.write(f"    Copyright Wrong Position: {copyright_diff_positions}\n")
+        
+        # Metadata block
+        f.write(f"Metadata Length: {metadata_len}\n")
+        f.write(f"    Metadata Before: {metadata_before_formatted}\n")
+        f.write(f"    Metadata After: {metadata_after_formatted}\n")
+        f.write(f"    Metadata Bit Error: {metadata_bit_error}\n")
+        f.write(f"    Metadata Wrong Position: {metadata_diff_positions}\n")
+        
+        # General block
+        f.write(f"    General Bit Length: {combined_length}\n")
+        f.write(f"    General Bit Before: {general_before_formatted}\n")
+        f.write(f"    General Bit After: {general_after_formatted}\n")
+        f.write(f"    General Bit Error: {general_bit_error}\n")
+        f.write(f"General Wrong Position: {general_diff_positions}\n")
         f.write("---------------------\n")
     
     return general_bit_error

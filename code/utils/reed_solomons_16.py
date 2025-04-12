@@ -21,7 +21,7 @@ def list_integer_to_binary_string_16(data):
     """
     return "".join(format(x, '016b') for x in data)
 
-def compute_parity(data_bit_str):
+def compute_parity_16(data_bit_str):
     """
     Tính toán parity cho dữ liệu gốc 64 bit (4 symbol 16-bit) sử dụng RSCodec với 4 ký hiệu parity.
     
@@ -37,14 +37,14 @@ def compute_parity(data_bit_str):
     if len(original_symbols) != 4:
         raise ValueError("Dữ liệu gốc phải được biểu diễn bởi 4 symbol (64 bit).")
     # RSCodec với 4 ký hiệu parity (mỗi ký hiệu 16 bit)
-    rs = RSCodec(nsym=4, c_exp=16)
+    rs = RSCodec(nsym=4, c_exp = 16)
     # Mã hóa: full codeword gồm 4 symbol dữ liệu + 4 symbol parity = 8 symbol
     encoded = rs.encode(original_symbols)
     # Lấy phần parity (4 symbol sau dữ liệu gốc)
     parity = encoded[len(original_symbols):]
     return list_integer_to_binary_string_16(parity)
 
-def recover_original(corrupted_bit_str):
+def recover_original_16(corrupted_bit_str):
     """
     Khôi phục codeword 128 bit (8 symbol, mỗi symbol 16 bit) đã bị lỗi sử dụng RSCodec với 4 ký hiệu parity.
     
@@ -61,7 +61,7 @@ def recover_original(corrupted_bit_str):
     corrupted_symbols = binary_string_to_list_integer_16(corrupted_bit_str)  # 8 symbol
     if len(corrupted_symbols) != 8:
         raise ValueError("Codeword phải chứa 8 symbol (128 bit).")
-    rs = RSCodec(nsym=4, c_exp=16)
+    rs = RSCodec(nsym=4, c_exp = 16)
     try:
         # decode trả về 3 giá trị: (decoded_message, corrected_codeword, errata_positions)
         decoded_message, corrected_codeword, _ = rs.decode(corrupted_symbols)
@@ -80,7 +80,7 @@ if __name__ == '__main__':
     print(original_data)
     
     # Tính parity (sẽ trả về 64 bit, 4 symbol)
-    parity = compute_parity(original_data)
+    parity = compute_parity_16(original_data)
     print("\nComputed parity (64-bit):")
     print(parity)
     
@@ -90,27 +90,27 @@ if __name__ == '__main__':
     print(full_codeword)
     
     # Tách codeword thành 8 symbol (mỗi symbol 16-bit)
-    # symbols = [full_codeword[i:i+16] for i in range(0, 128, 16)]
-    # print("\nOriginal symbols:")
-    # for idx, sym in enumerate(symbols):
-    #     print(f"Symbol {idx}: {sym}")
+    symbols = [full_codeword[i:i+16] for i in range(0, 128, 16)]
+    print("\nOriginal symbols:")
+    for idx, sym in enumerate(symbols):
+        print(f"Symbol {idx}: {sym}")
     
-    # # Giả lập lỗi: chèn lỗi vào 2 symbol bằng cách đảo 1 bit ngẫu nhiên trong mỗi symbol
-    # error_indices = random.sample(range(8), 2)
-    # print("\nError indices (symbol indices):", error_indices)
-    # corrupted_symbols = symbols.copy()
-    # for idx in error_indices:
-    #     block = list(corrupted_symbols[idx])  # danh sách ký tự của symbol (16 bit)
-    #     bit_to_flip = random.randint(0, 15)
-    #     block[bit_to_flip] = '1' if block[bit_to_flip] == '0' else '0'
-    #     corrupted_symbols[idx] = "".join(block)
-    # corrupted_codeword = "".join(corrupted_symbols)
-    # print("\nCorrupted full codeword (128-bit):")
-    # print(corrupted_codeword)
+    # Giả lập lỗi: chèn lỗi vào 2 symbol bằng cách đảo 1 bit ngẫu nhiên trong mỗi symbol
+    error_indices = random.sample(range(8), 2)
+    print("\nError indices (symbol indices):", error_indices)
+    corrupted_symbols = symbols.copy()
+    for idx in error_indices:
+        block = list(corrupted_symbols[idx])  # danh sách ký tự của symbol (16 bit)
+        bit_to_flip = random.randint(0, 15)
+        block[bit_to_flip] = '1' if block[bit_to_flip] == '0' else '0'
+        corrupted_symbols[idx] = "".join(block)
+    corrupted_codeword = "".join(corrupted_symbols)
+    print("\nCorrupted full codeword (128-bit):")
+    print(corrupted_codeword)
     
     # Khôi phục codeword đã bị lỗi
     try:
-        recovered_codeword = recover_original("10101100011001101111011010010110101011001100110111101101001011010001000101010100101110010000110000111100000111101000011101110110")
+        recovered_codeword = recover_original_16("10101100011001101111011010010110101011001100110111101101001011010001000101010100101110010000110000111100000111101000011101110110")
         print("\nRecovered full codeword (128-bit):")
         print(recovered_codeword)
         # print("\nRecovery successful:", recovered_codeword == full_codeword)

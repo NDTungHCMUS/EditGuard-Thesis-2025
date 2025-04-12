@@ -39,6 +39,12 @@ mode: image
 result_path: "results/ori_result.txt"
 # ----- VN END -----
 
+# ----- VN START -----
+#### correction type
+
+type_correction_code: 1
+# ----- VN END -----
+
 #### datasets
 
 datasets:
