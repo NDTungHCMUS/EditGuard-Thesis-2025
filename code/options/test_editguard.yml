@@ -57,15 +57,15 @@ datasets:
     num_child_images: 4
     width: 256
     height: 256
-    data_path: ../dataset/valAGE-Set
-    txt_path:  ../dataset/sep_testlist_10-eles.txt
-    copyright_path: ../dataset/copyrights-10-eles.txt
-    split_path_ori: ../dataset/valAGE-Set-10-eles-512px-split-ori
-    split_path_con: ../dataset/valAGE-Set-10-eles-512px-split-con
-    split_path_rec: ../dataset/valAGE-Set-10-eles-512px-split-rec
-    merge_path: ../dataset/valAGE-Set-10-eles-512px-merge
-    copyright_output_without_correction: ../dataset/copyright-10-eles-512px-output-without-correction.txt
-    copyright_output_with_correction: ../dataset/copyright-10-eles-512px-output-with-correction.txt
+    data_path: ../dataset/valAGE-Set(4096,3072)
+    txt_path:  ../dataset/sep_testlist_20-eles.txt
+    copyright_path: ../dataset/copyrights-20-eles.txt
+    split_path_ori: ../dataset/valAGE-Set-20-eles-(4096,3072)px-split-ori
+    split_path_con: ../dataset/valAGE-Set-20-eles-(4096,3072)px-split-con
+    split_path_rec: ../dataset/valAGE-Set-20-eles-(4096,3072)px-split-rec
+    merge_path: ../dataset/valAGE-Set-20-eles-(4096,3072)px-merge
+    copyright_output_without_correction: ../dataset/copyright-20-eles-(4096,3072)px-output-without-correction.txt
+    copyright_output_with_correction: ../dataset/copyright-20-eles-(4096,3072)px-output-with-correction.txt
     # ----- ORIGINAL -----
     # num_images: 1
     # data_path: ../dataset/valAGE-Set
