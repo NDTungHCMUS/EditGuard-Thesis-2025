@@ -751,7 +751,7 @@ class Model_VSN(BaseModel):
         self.save_network(self.netG, 'G', iter_label)
 
     # ----- VN Start -----
-    def embed(self, message = "0" * 64):
+    def embed(self, message = "0" * 64, embedMessage = True):
         self.netG.eval()
         messagenp = bit_string_to_messagenp(message, batch_size=1)
 
@@ -777,12 +777,14 @@ class Model_VSN(BaseModel):
 
             # print("Message [-0.5, 0.5]: ", message)
 
-            if self.opt['hide']:
+            if embedMessage:
                 self.output, container = self.netG(x=dwt(self.host.reshape(b, -1, h, w)), x_h=self.secret, message=message)
                 y_forw = container
                 self.container = container.clone()
             # print("Shape của self.container: ", self.container.shape)
-        return self.container, message
+        if embedMessage:
+            return self.host, self.container, message
+        return self.host, -1, message
 
     def diffusion(self, image_id, y_forw):
         add_noise = self.opt['addnoise']
@@ -803,7 +805,7 @@ class Model_VSN(BaseModel):
 
                 for j in range(b):
                     i = image_id + 1
-                    masksrc = "../dataset/valAGE-Set-Mask/"
+                    masksrc = "../dataset/valAGE-Set-Mask(4096,3072)/"
                     mask_image = Image.open(masksrc + str(i).zfill(4) + ".png").convert("L")
 
                     # ----- VN Start -----

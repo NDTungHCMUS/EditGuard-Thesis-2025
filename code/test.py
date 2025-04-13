@@ -19,7 +19,6 @@ import numpy as np
 ## Explaination: Import library
 from utils.random_walk import random_walk_unique
 from utils.my_util import load_copyright_metadata_from_files, tensor_to_binary_string, compute_parity_from_list_copyright_metadata, compute_message, get_copyright_metadata_from_list_with_correction, get_copyright_metadata_from_list_without_correction, split_all_images, combine_torch_tensors_4d, split_torch_tensors_4d, write_extracted_messages
-from code.utils.reed_solomons_16 import compute_parity, recover_original
 # ------ VN End ------
 
 def init_dist(backend='nccl', **kwargs):
@@ -139,9 +138,13 @@ def main():
     
     # ----- VN Start -----
     ## Explaination: Initialize neccessary variables
+    ### Note: num_child_images = num_child_on_width_size * num_child_on_height_size
     cnt_cannot_solve_all = 0
     num_images = opt['datasets']['TD']['num_images']
     num_child_images = opt['datasets']['TD']['num_child_images']
+    num_child_on_width_size = opt['datasets']['TD']['num_child_on_width_size']
+    num_child_on_height_size = opt['datasets']['TD']['num_child_on_height_size']
+    number_of_64bits_blocks_input = opt['datasets']['TD']['metadata_length'] // 64 + opt['datasets']['TD']['message_length'] // 64
     bit_error_list_without_correction_code = []
     bit_error_list_with_correction_code = []
 
@@ -156,12 +159,16 @@ def main():
                 'GT': val_data['GT'][i].unsqueeze(0)
             }
             model.feed_data(child_data)
-            message = compute_message(i, list_dict_copyright_metadata[parent_image_id], list_dict_parity_copyright_metadata[parent_image_id])
-            I_container, messageTensor = model.embed(message)
-            list_messageTensor.append(messageTensor)
-            list_container.append(I_container)
+            if i < number_of_64bits_blocks_input * 2:
+                message = compute_message(i, list_dict_copyright_metadata[parent_image_id], list_dict_parity_copyright_metadata[parent_image_id])
+                I_ori, I_container, messageTensor = model.embed(message)
+                list_messageTensor.append(messageTensor)
+                list_container.append(I_container)
+            else:
+                I_ori, I_container, messageTensor = model.embed(embedMessage = False)
+                list_container.append(I_ori)
 
-        # Step 1.1: Save n^2 images to folder
+        # Step 1.1: Save all child images to folder
         for i in range(len(list_container)):
             child_container_img = util.tensor2img(list_container[i].detach()[0].float().cpu())
             folder_name = str(parent_image_id + 1).zfill(4)
@@ -169,8 +176,8 @@ def main():
             save_img_path = os.path.join(output_folder,f'{str(i).zfill(4)}.png')
             util.save_img(child_container_img, save_img_path)
 
-        # Step 2: Combine n^2 images into one (4 dimensions)
-        parent_container = combine_torch_tensors_4d(list_container, num_images = num_child_images)
+        # Step 2: Combine all child images into one (4 dimensions)
+        parent_container = combine_torch_tensors_4d(list_container, num_child_on_width_size, num_child_on_height_size)
 
         # Step 2.1: Save parent_container to folder
         parent_container_img = util.tensor2img(parent_container.detach()[0].float().cpu())
@@ -185,11 +192,11 @@ def main():
         save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id + 1).zfill(4)}_diffusion.png')
         util.save_img(parent_rec_img, save_img_path)
 
-        # Step 4: Split parent_rec into n^2 images
-        list_rec = split_torch_tensors_4d(parent_y_forw, num_child_images = num_child_images)
-        list_rec_quantize = split_torch_tensors_4d(parent_y, num_child_images = num_child_images)
+        # Step 4: Split parent_rec into child images
+        list_rec = split_torch_tensors_4d(parent_y_forw, num_child_on_width_size, num_child_on_height_size)
+        list_rec_quantize = split_torch_tensors_4d(parent_y, num_child_on_width_size, num_child_on_height_size)
         
-        # Step 4.1: Save n^2 images to folder
+        # Step 4.1: Save all child images to folder
         for i in range(len(list_rec)):
             child_rec_img = util.tensor2img(list_rec[i].detach()[0].float().cpu())
             folder_name = str(parent_image_id + 1).zfill(4)
@@ -199,14 +206,14 @@ def main():
             
         list_recmessage = []
         list_message = []
-        # Step 5: Extract from n^2 child images
-        for i in range(0, num_child_images):
+        # Step 5: Extract from all child images
+        for i in range(0, number_of_64bits_blocks_input * 2):
             recmessage, message = model.extract(list_messageTensor[i], y_forw = list_rec[i], y = list_rec_quantize[i])
             list_recmessage.append(recmessage)
             list_message.append(message)
 
         # Step 5.1: Convert list_message, list_recmessage from tensor to binary string
-        for i in range(0, num_child_images):
+        for i in range(0, len(list_message)):
           list_message[i] = tensor_to_binary_string(list_message[i])
           list_recmessage[i] = tensor_to_binary_string(list_recmessage[i])
         
@@ -225,7 +232,7 @@ def main():
     avg_bit_error_with_correction = sum(bit_error_list_with_correction_code) / len(bit_error_list_with_correction_code)
 
     # PRINT RESULT
-    print(f"Cannot Solve {cnt_cannot_solve_all} pairs among {num_images * num_child_images // 2} pairs")
+    # print(f"Cannot Solve {cnt_cannot_solve_all} pairs among {num_images * num_child_images // 2} pairs")
     algo_type = "REED-SOLOMON 16"
     if (type_correction_code == 2):
         algo_type = "REED-SOLOMON 8"

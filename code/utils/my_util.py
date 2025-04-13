@@ -247,25 +247,35 @@ def split_all_images(input_folder="A", output_folder="B", num_child_images = 4, 
         split_and_save_image_torch(img_path, save_dir, num_child_images=num_child_images)
 
 ## Explaination: Combine child tensors to parent tensor (4 dimensions)
-def combine_torch_tensors_4d(list_container, num_images=None):
-    # Nếu không truyền num_images, mặc định bằng độ dài của list_container
-    if num_images is None:
-        num_images = len(list_container)
+def combine_torch_tensors_4d(list_container, num_child_on_width_size, num_child_on_height_size):
+    """
+    Ghép các tensor (shape: (B, C, H, W)) trong list_container thành một ảnh lưới cho mỗi mẫu trong batch.
     
-    # Kiểm tra xem list_container có đủ tensor
-    if len(list_container) < num_images:
+    Thay vì dùng một số duy nhất (num_images) và yêu cầu số đó là số chính phương, 
+    ta truyền vào số lượng con theo chiều rộng (num_child_on_width_size) và chiều cao (num_child_on_height_size).
+    
+    Ví dụ: Nếu bạn có 48 ảnh con, bạn có thể ghép thành lưới 8 cột và 6 hàng bằng cách:
+        combine_torch_tensors_4d(list_container, num_child_on_width_size=8, num_child_on_height_size=6)
+    
+    Args:
+        list_container (list): Danh sách các 4D torch.Tensor với shape (B, C, H, W)
+        num_child_on_width_size (int): Số ảnh con ghép ngang (số cột).
+        num_child_on_height_size (int): Số ảnh con ghép dọc (số hàng).
+    
+    Returns:
+        torch.Tensor: Ảnh lưới kết hợp có shape (B, C, num_child_on_height_size*H, num_child_on_width_size*W)
+    """
+    # Tổng số ảnh con cần ghép
+    num_children = num_child_on_width_size * num_child_on_height_size
+    
+    # Kiểm tra số lượng tensor có đủ không
+    if len(list_container) < num_children:
         raise ValueError(
-            f"Danh sách chỉ có {len(list_container)} tensor, "
-            f"nhưng yêu cầu ghép {num_images} tensor."
+            f"Danh sách chỉ có {len(list_container)} tensor, nhưng yêu cầu ghép {num_children} tensor."
         )
     
-    # Kiểm tra num_images có phải là số chính phương hay không
-    root = int(math.sqrt(num_images))
-    if root * root != num_images:
-        raise ValueError(f"num_images = {num_images} không phải số chính phương (4, 9, 16, 25, 36, ...).")
-    
-    # Nếu list_container có nhiều hơn num_images, chỉ lấy đúng num_images phần tử đầu
-    list_container = list_container[:num_images]
+    # Nếu có nhiều hơn, chỉ lấy đúng num_children phần tử đầu
+    list_container = list_container[:num_children]
     
     # Lấy shape từ tensor đầu tiên để đối chiếu
     B, C, H, W = list_container[0].shape
@@ -274,52 +284,61 @@ def combine_torch_tensors_4d(list_container, num_images=None):
     for idx, tensor in enumerate(list_container):
         if tensor.shape != (B, C, H, W):
             raise ValueError(
-                f"Tensor tại index {idx} có shape {tensor.shape} "
-                f"không khớp với tensor đầu tiên ({B, C, H, W})."
+                f"Tensor tại index {idx} có shape {tensor.shape} không khớp với tensor đầu tiên ({B}, {C}, {H}, {W})."
             )
     
-    # Ta sẽ tạo danh sách chứa các ảnh lưới của từng mẫu trong batch
+    # Tạo danh sách chứa ảnh lưới cho từng mẫu trong batch
     grid_list = []
-    
-    # Duyệt qua từng mẫu trong batch
     for b in range(B):
-        # Lấy ra "ảnh" thứ b từ mỗi tensor (mỗi ảnh có shape (C, H, W))
+        # Lấy ra ảnh thứ b từ mỗi tensor (mỗi ảnh có shape (C, H, W))
         images = [t[b] for t in list_container]
         
         rows = []
-        # Tạo lần lượt từng hàng (mỗi hàng chứa root ảnh ghép ngang)
-        for i in range(root):
-            # Ghép ngang 6 ảnh (hoặc root ảnh) theo dim=2
-            row = torch.cat(images[i * root : (i + 1) * root], dim=2)
+        # Ghép từng hàng: mỗi hàng chứa num_child_on_width_size ảnh liên tiếp
+        for i in range(num_child_on_height_size):
+            start_idx = i * num_child_on_width_size
+            end_idx   = (i + 1) * num_child_on_width_size
+            row = torch.cat(images[start_idx:end_idx], dim=2)  # Ghép theo chiều rộng
             rows.append(row)
         
-        # Ghép dọc các hàng theo dim=1
-        grid_image = torch.cat(rows, dim=1)  # shape (C, root*H, root*W)
-        
-        # Thêm batch dimension cho ảnh lưới rồi append vào list
-        grid_list.append(grid_image.unsqueeze(0))  # shape (1, C, root*H, root*W)
+        # Ghép dọc các hàng để tạo ảnh lưới cho mẫu thứ b
+        grid_image = torch.cat(rows, dim=1)  # Kết quả có shape (C, num_child_on_height_size * H, num_child_on_width_size * W)
+        grid_list.append(grid_image.unsqueeze(0))  # Thêm batch dimension
     
-    # Ghép tất cả ảnh lưới của từng mẫu batch lại với nhau theo dim=0
-    result = torch.cat(grid_list, dim=0)  # shape (B, C, root*H, root*W)
+    # Ghép lại tất cả các ảnh lưới của từng mẫu trong batch theo dim=0
+    result = torch.cat(grid_list, dim=0)  # Kết quả có shape (B, C, num_child_on_height_size * H, num_child_on_width_size * W)
     
     return result
 
 ## Explaination: Split parent tensor to child tensors (4 dimensions)
-def split_torch_tensors_4d(parent_container_grid, num_child_images=4):
-    grid_size = int(math.sqrt(num_child_images))
+def split_torch_tensors_4d(parent_container_grid, num_child_on_width_size, num_child_on_height_size):
+    """
+    Tách một tensor 4D (đại diện cho một lưới ảnh) thành các "patch" (ảnh con)
+    theo số lượng ảnh con theo chiều rộng và chiều cao.
+    
+    Args:
+        parent_container_grid (torch.Tensor): Tensor có shape (B, C, H_total, W_total)
+        num_child_on_width_size (int): Số ảnh con theo chiều rộng (số cột).
+        num_child_on_height_size (int): Số ảnh con theo chiều cao (số hàng).
+        
+    Returns:
+        list: Danh sách các tensor con, mỗi tensor có shape (B, C, patch_H, patch_W)
+    """
     B, C, H_total, W_total = parent_container_grid.shape
 
-    # Kiểm tra H_total và W_total có chia hết cho grid_size không
-    if H_total % grid_size != 0 or W_total % grid_size != 0:
-        raise ValueError(f"H_total ({H_total}) và W_total ({W_total}) phải chia hết cho grid_size {grid_size}.")
+    # Kiểm tra chia hết để có thể tách đều
+    if H_total % num_child_on_height_size != 0:
+        raise ValueError(f"H_total ({H_total}) phải chia hết cho num_child_on_height_size ({num_child_on_height_size}).")
+    if W_total % num_child_on_width_size != 0:
+        raise ValueError(f"W_total ({W_total}) phải chia hết cho num_child_on_width_size ({num_child_on_width_size}).")
 
-    patch_H = H_total // grid_size
-    patch_W = W_total // grid_size
+    patch_H = H_total // num_child_on_height_size
+    patch_W = W_total // num_child_on_width_size
     patches = []
 
     # Duyệt qua từng hàng và cột của lưới
-    for i in range(grid_size):
-        for j in range(grid_size):
+    for i in range(num_child_on_height_size):
+        for j in range(num_child_on_width_size):
             patch = parent_container_grid[:, :, 
                      i * patch_H:(i + 1) * patch_H, 
                      j * patch_W:(j + 1) * patch_W]
