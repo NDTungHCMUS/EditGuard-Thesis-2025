@@ -53,10 +53,10 @@ datasets:
     mode: td
     
     # ----- VN Start -----
-    num_images: 10
-    num_child_images: 4
-    width: 256
-    height: 256
+    num_images: 20
+    num_child_images: 48
+    width: 512
+    height: 512
     data_path: ../dataset/valAGE-Set(4096,3072)
     txt_path:  ../dataset/sep_testlist_20-eles.txt
     copyright_path: ../dataset/copyrights-20-eles.txt
