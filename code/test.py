@@ -145,7 +145,7 @@ def main():
     num_child_images = opt['datasets']['TD']['num_child_images']
     num_child_on_width_size = opt['datasets']['TD']['num_child_on_width_size']
     num_child_on_height_size = opt['datasets']['TD']['num_child_on_height_size']
-    number_of_64bits_blocks_input = opt['datasets']['TD']['metadata_length'] // 64 + opt['datasets']['TD']['message_length'] // 64
+    number_of_64bits_blocks_input = opt['metadata_length'] // 64 + opt['message_length'] // 64
     bit_error_list_without_correction_code = []
     bit_error_list_with_correction_code = []
 
