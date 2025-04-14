@@ -181,70 +181,89 @@ def tensor_to_binary_string(tensor):
     return binary_string
 
 ## Explaination: Split parent images into child images
-def split_and_save_image_torch(image_path, output_folder="images", num_child_images = 4):
+def split_and_save_image_torch(image_path, output_folder="images", 
+                               num_child_on_width_size=2, num_child_on_height_size=2):
     """
-    Chia ảnh thành grid_size x grid_size phần bằng nhau và lưu vào thư mục output_folder.
+    Split an image into equal patches and save them in the output folder.
     
     Args:
-        image_path (str): Đường dẫn đến ảnh.
-        output_folder (str): Thư mục để lưu ảnh.
-        grid_size (int): Số phần theo mỗi chiều (mặc định 6, tức 36 phần).
-    
-    Yêu cầu:
-        - Chiều cao (H) và chiều rộng (W) của ảnh phải chia hết cho grid_size.
+        image_path (str): Path to the image.
+        output_folder (str): Folder to save the patches.
+        num_child_on_width_size (int): Number of patches along the width (columns).
+        num_child_on_height_size (int): Number of patches along the height (rows).
+        
+    Requirements:
+        - The image height (H) and width (W) must be divisible by num_child_on_height_size and
+          num_child_on_width_size respectively.
     """
-    # Đọc ảnh với PIL và chuyển thành RGB
+    # Open the image with PIL and convert to RGB.
     img = Image.open(image_path).convert("RGB")
-    # Chuyển ảnh thành tensor có shape (C, H, W)
+    # Convert image to tensor with shape (C, H, W)
     img_tensor = TF.to_tensor(img)
-    grid_size = int(math.sqrt(num_child_images))
     
     C, H, W = img_tensor.shape
-    if H % grid_size != 0 or W % grid_size != 0:
-        raise ValueError(f"Chiều cao H={H} và chiều rộng W={W} của ảnh phải chia hết cho grid_size {grid_size}.")
     
-    patch_H = H // grid_size
-    patch_W = W // grid_size
+    # Check that the image dimensions are divisible by the grid sizes.
+    if H % num_child_on_height_size != 0 or W % num_child_on_width_size != 0:
+        raise ValueError(
+            f"Image height H={H} and width W={W} must be divisible by "
+            f"num_child_on_height_size={num_child_on_height_size} and num_child_on_width_size={num_child_on_width_size}."
+        )
     
-    os.makedirs(output_folder, exist_ok=True)  # Tạo thư mục nếu chưa tồn tại
+    # Compute the size of each patch.
+    patch_H = H // num_child_on_height_size
+    patch_W = W // num_child_on_width_size
+    
+    os.makedirs(output_folder, exist_ok=True)  # Create the output folder if it doesn't exist.
     
     count = 0
-    for i in range(grid_size):
-        for j in range(grid_size):
-            patch = img_tensor[:, i * patch_H:(i + 1) * patch_H, j * patch_W:(j + 1) * patch_W]
+    # Loop over rows (height) and columns (width)
+    for i in range(num_child_on_height_size):
+        for j in range(num_child_on_width_size):
+            patch = img_tensor[:, 
+                               i * patch_H:(i + 1) * patch_H, 
+                               j * patch_W:(j + 1) * patch_W]
             patch_img = TF.to_pil_image(patch)
             patch_img.save(os.path.join(output_folder, f"{count}.png"))
             count += 1
 
-    print(f"Đã lưu {count} ảnh vào thư mục {output_folder}")
+    print(f"Saved {count} patches into the folder {output_folder}")
 
-def split_all_images(input_folder="A", output_folder="B", num_child_images = 4, num_images = 10):
+def split_all_images(input_folder="A", output_folder="B", num_images=10, 
+                     num_child_on_width_size=2, num_child_on_height_size=2):
     """
-    Duyệt qua tất cả các ảnh trong thư mục input_folder, chia nhỏ và lưu vào output_folder.
-
-    Args:
-        input_folder (str): Thư mục chứa ảnh gốc.
-        output_folder (str): Thư mục để lưu ảnh đã cắt.
-    """
-    os.makedirs(output_folder, exist_ok=True)  # Đảm bảo thư mục đầu ra tồn tại
-
-     # Lấy danh sách các file, sắp xếp theo thứ tự tăng dần dựa trên tên file
-    files = sorted(os.listdir(input_folder))
+    Process all images in input_folder, split them into patches, 
+    and save the patches (for each image separately) into output_folder.
     
+    Args:
+        input_folder (str): Folder containing the original images.
+        output_folder (str): Folder where the split patches will be saved.
+        num_images (int): Number of images to process (if None, process all).
+        num_child_on_width_size (int): Number of patches along the width.
+        num_child_on_height_size (int): Number of patches along the height.
+    """
+    os.makedirs(output_folder, exist_ok=True)  # Ensure the output folder exists
+    
+    # Get a sorted list of files from the input folder.
+    files = sorted(os.listdir(input_folder))
     image_files = [f for f in files if f.lower().endswith((".png", ".jpg", ".jpeg"))]
     
     if num_images is not None:
         image_files = image_files[:num_images]
     
-    # Duyệt qua các file ảnh đã sắp xếp
+    # Process each image file
     for filename in image_files:
         img_path = os.path.join(input_folder, filename)
-        img_name, _ = os.path.splitext(filename)  # Lấy tên file không có đuôi
-        save_dir = os.path.join(output_folder, img_name)  # Tạo thư mục riêng cho ảnh
+        img_name, _ = os.path.splitext(filename)  # Get file name without extension.
+        save_dir = os.path.join(output_folder, img_name)  # Create a separate folder per image.
         os.makedirs(save_dir, exist_ok=True)
         
-        # Gọi hàm split (giả sử hàm này đã được định nghĩa)
-        split_and_save_image_torch(img_path, save_dir, num_child_images=num_child_images)
+        split_and_save_image_torch(
+            img_path, 
+            output_folder=save_dir, 
+            num_child_on_width_size=num_child_on_width_size, 
+            num_child_on_height_size=num_child_on_height_size
+        )
 
 ## Explaination: Combine child tensors to parent tensor (4 dimensions)
 def combine_torch_tensors_4d(list_container, num_child_on_width_size, num_child_on_height_size):
