@@ -75,7 +75,7 @@ def recover_original_16(corrupted_bit_str):
 # Ví dụ minh họa:
 if __name__ == '__main__':
     # Dữ liệu gốc 64 bit (4 symbol 16-bit)
-    original_data = "1010110001100110111101101001011010101100110011011110110100101101"
+    original_data = "1010101011101101101010110110011101000111110001010110110001111100"
     print("Original data (64-bit):")
     print(original_data)
     
@@ -96,23 +96,30 @@ if __name__ == '__main__':
         print(f"Symbol {idx}: {sym}")
     
     # Giả lập lỗi: chèn lỗi vào 2 symbol bằng cách đảo 1 bit ngẫu nhiên trong mỗi symbol
-    error_indices = random.sample(range(8), 2)
+    error_indices = [0, 3]
     print("\nError indices (symbol indices):", error_indices)
     corrupted_symbols = symbols.copy()
     for idx in error_indices:
         block = list(corrupted_symbols[idx])  # danh sách ký tự của symbol (16 bit)
         bit_to_flip = random.randint(0, 15)
+        if (idx == 0):
+            bit_to_flip = 7
+        elif (idx == 3):
+            bit_to_flip = 12
         block[bit_to_flip] = '1' if block[bit_to_flip] == '0' else '0'
         corrupted_symbols[idx] = "".join(block)
     corrupted_codeword = "".join(corrupted_symbols)
     print("\nCorrupted full codeword (128-bit):")
     print(corrupted_codeword)
+    print("Corrupted codeword 64 bit dau: ", corrupted_codeword[0:64])
     
     # Khôi phục codeword đã bị lỗi
     try:
-        recovered_codeword = recover_original_16("10101100011001101111011010010110101011001100110111101101001011010001000101010100101110010000110000111100000111101000011101110110")
+        recovered_codeword = recover_original_16(corrupted_codeword)
         print("\nRecovered full codeword (128-bit):")
         print(recovered_codeword)
+        print("Recover_Codeword 64 bit dau: ", recovered_codeword[0:64])
+        print ("RECOVER DUNG: ", recovered_codeword[0:64] == original_data)
         # print("\nRecovery successful:", recovered_codeword == full_codeword)
     except ReedSolomonError as e:
         print("Recovery failed:", e)

@@ -783,8 +783,8 @@ class Model_VSN(BaseModel):
                 self.container = container.clone()
             # print("Shape của self.container: ", self.container.shape)
         if embedMessage:
-            return self.host, self.container, message
-        return self.host, -1, message
+            return self.host[0], self.container, message
+        return self.host[0], -1, message
 
     def diffusion(self, image_id, y_forw):
         add_noise = self.opt['addnoise']

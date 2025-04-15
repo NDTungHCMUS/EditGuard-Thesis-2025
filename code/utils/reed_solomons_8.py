@@ -72,6 +72,7 @@ def recover_original_8(corrupted_bit_str):
         # rs.decode returns a tuple: (decoded_message, corrected_codeword, errata_positions)
         decoded_message, corrected_codeword, _ = rs.decode(bytearray(corrupted_symbols))
     except ReedSolomonError as e:
+        return -1
         raise ReedSolomonError("Unable to recover codeword: " + str(e))
     return list_integer_to_binary_string_8(list(corrected_codeword))
 
