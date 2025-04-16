@@ -28,8 +28,7 @@ def ldpc_encode(data_bit_str, P):
     d = np.array([int(b) for b in data_bit_str], dtype=int)
     p = np.mod(P.dot(d), 2)
     parity_str = "".join(str(bit) for bit in p)
-    codeword = data_bit_str + parity_str
-    return codeword
+    return parity_str
 
 def introduce_random_errors(bitstring, num_errors=1):
     """
