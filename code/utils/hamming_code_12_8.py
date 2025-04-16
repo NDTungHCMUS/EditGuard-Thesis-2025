@@ -46,12 +46,14 @@ def decode_hamming12_8(block):
           s4 = p4 XOR d5 XOR d6 XOR d7 XOR d8         (bit[7] ^ bit[8] ^ bit[9] ^ bit[10] ^ bit[11])
       - Gộp syndrome theo thứ tự (s4 s3 s2 s1) cho ra vị trí bit bị lỗi (nếu không có lỗi thì syndrome = 0).
     
-    Sau đó trích xuất 8 bit dữ liệu từ vị trí: 3,5,6,7,9,10,11,12 (0-indexed: 2,4,5,6,8,9,10,11).
+    Sau đó trích xuất 8 bit dữ liệu từ các vị trí: 3,5,6,7,9,10,11,12 (0-indexed: 2,4,5,6,8,9,10,11).
+    
+    Nếu giá trị syndrome vượt quá số lượng bit trong codeword (tức > 12), điều đó có thể cho thấy lỗi không đơn
+    (hoặc lỗi không thể sửa bằng Hamming(12,8)) và bit lỗi sẽ không được sửa.
     """
     if len(block) != 12:
         raise ValueError("Block phải có 12 bit.")
     bits = list(block)
-    # Chuyển các bit sang kiểu int cho thuận tiện tính XOR
     bits = [int(b) for b in bits]
     
     s1 = bits[0] ^ bits[2] ^ bits[4] ^ bits[6] ^ bits[8]  ^ bits[10]
@@ -59,13 +61,17 @@ def decode_hamming12_8(block):
     s3 = bits[3] ^ bits[4] ^ bits[5] ^ bits[6] ^ bits[11]
     s4 = bits[7] ^ bits[8] ^ bits[9] ^ bits[10] ^ bits[11]
     
-    syndrome = s4 * 8 + s3 * 4 + s2 * 2 + s1  # syndrome từ 0 đến 12
+    syndrome = s4 * 8 + s3 * 4 + s2 * 2 + s1  # syndrome từ 0 đến 15
     if syndrome != 0:
-        error_index = syndrome - 1  # chuyển về chỉ số 0-indexed
-        # Sửa lỗi: đảo bit tại error_index
-        bits[error_index] = 1 - bits[error_index]
+        # Chuyển syndrome (1-indexed) về chỉ số 0-indexed.
+        error_index = syndrome - 1
+        if error_index < len(bits):
+            bits[error_index] = 1 - bits[error_index]
+        else:
+            print("Warning: Syndrome out of range (", syndrome, 
+                  "). Cannot correct error in block:", block)
     
-    # Trích xuất dữ liệu từ các vị trí: 3,5,6,7,9,10,11,12 => indices 2,4,5,6,8,9,10,11
+    # Trích xuất 8 bit dữ liệu từ các vị trí: 3,5,6,7,9,10,11,12 (indices 2,4,5,6,8,9,10,11)
     data = [str(bits[i]) for i in [2, 4, 5, 6, 8, 9, 10, 11]]
     return "".join(data)
 
@@ -143,7 +149,7 @@ def recover_original_hamming_12_8(corrupted_bit_str):
 # Ví dụ sử dụng:
 if __name__ == '__main__':
     # Dữ liệu gốc: chuỗi 64 bit
-    original_data = "1010101111001101111011110000111100001010101010101100110010101010"
+    original_data = "1100110110101101001010001110100110000010101010100110011101000101"
     if len(original_data) != 64:
         raise ValueError("Dữ liệu gốc phải là 64 bit.")
     
