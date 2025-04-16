@@ -139,16 +139,17 @@ if __name__ == '__main__':
     print(full_codeword)
     
     # Giới thiệu lỗi ngẫu nhiên: thay đổi 5 bit bất kỳ trong codeword
-    def introduce_random_errors(bitstring, num_errors=1):
+    def introduce_random_errors(bitstring, num_errors=20):
         bit_list = list(bitstring)
         indices = random.sample(range(len(bit_list)), num_errors)
         for i in indices:
             bit_list[i] = '1' if bit_list[i] == '0' else '0'
         return "".join(bit_list)
     
-    corrupted_codeword = introduce_random_errors(full_codeword, num_errors=5)
+    corrupted_codeword = introduce_random_errors(full_codeword, num_errors=20)
     print("\nCorrupted Codeword (128 bits) with 5 bit errors:")
     print(corrupted_codeword)
+    print("Positions of errors:", [i for i, (a, b) in enumerate(zip(full_codeword, corrupted_codeword)) if a != b])
     
     # Khôi phục codeword bằng phương pháp Hamming từng nibble
     recovered_codeword = recover_original_hamming_74(corrupted_codeword)
@@ -161,5 +162,6 @@ if __name__ == '__main__':
         print("\nSuccess: Recovered data matches the original data.")
     else:
         print("\nWarning: Recovered data does not match the original data.")
+        print("Positions of errors:", [i for i, (a, b) in enumerate(zip(original_data, recovered_data)) if a != b])
 
 # ----- VN End -----

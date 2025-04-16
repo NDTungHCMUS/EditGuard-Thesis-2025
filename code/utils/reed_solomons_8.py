@@ -1,6 +1,6 @@
 # ----- VN Start -----
 from reedsolo import RSCodec, ReedSolomonError
-
+import random
 def binary_string_to_list_integer_8(binary_string):
     """
     Convert a binary string into a list of integers,
@@ -95,15 +95,18 @@ if __name__ == '__main__':
     print("\nFull Codeword (128 bits):")
     print(full_codeword)
     
-    # Introduce an error: flip a bit in one of the symbols
-    # For demonstration, let's flip one bit in the codeword.
-    # Convert codeword to a list for easy modification.
-    codeword_list = list(full_codeword)
-    # Flip the bit at position 10 (for example)
-    codeword_list[10] = '1' if codeword_list[10] == '0' else '0'
-    corrupted_codeword = "".join(codeword_list)
-    print("\nCorrupted Codeword (128 bits):")
+    # Giới thiệu lỗi ngẫu nhiên: thay đổi 5 bit bất kỳ trong codeword
+    def introduce_random_errors(bitstring, num_errors=20):
+        bit_list = list(bitstring)
+        indices = random.sample(range(len(bit_list)), num_errors)
+        for i in indices:
+            bit_list[i] = '1' if bit_list[i] == '0' else '0'
+        return "".join(bit_list)
+    
+    corrupted_codeword = introduce_random_errors(full_codeword, num_errors=5)
+    print("\nCorrupted Codeword (128 bits) with 5 bit errors:")
     print(corrupted_codeword)
+    print("Positions of errors:", [i for i, (a, b) in enumerate(zip(full_codeword, corrupted_codeword)) if a != b])
     
     # Attempt to recover the original codeword from the corrupted one
     try:
