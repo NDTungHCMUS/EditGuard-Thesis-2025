@@ -1,3 +1,5 @@
+# ----- VN Start -----
+
 import numpy as np
 import random
 import math
@@ -155,3 +157,5 @@ if __name__ == '__main__':
     else:
         print("\nWarning: Recovered data does not match the original data.")
         print("Positions of errors:", [i for i, (a, b) in enumerate(zip(original_data, recovered_data)) if a != b])
+
+# ----- VN End -----
