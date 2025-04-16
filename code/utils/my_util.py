@@ -77,6 +77,10 @@ def compute_parity_from_list_copyright_metadata(list_copyright_metadata, type_co
                 parity_metadata = compute_parity_8(metadata)
             elif (type_correction_code == 3):
                 parity_metadata = compute_parity_hamming_74(metadata)
+            elif (type_correction_code == 4):
+                parity_metadata = compute_parity_hamming_12_8(metadata)
+            elif (type_correction_code == 5):
+                parity_metadata = ldpc_encode(metadata, P)
             else:
                 parity_metadata = "0" * 64
             parity_data["metadata"].append(parity_metadata)

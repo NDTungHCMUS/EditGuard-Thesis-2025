@@ -161,7 +161,7 @@ def recover_original_hamming_12_8(corrupted_bit_str):
 # Ví dụ sử dụng:
 if __name__ == '__main__':
     # Dữ liệu gốc: chuỗi 64 bit
-    original_data = "1100110110101101001010001110100110000010101010100110011101000101"
+    original_data = "1010101101001001010010000001110001010001100100110111010011010011"
     if len(original_data) != 64:
         raise ValueError("Dữ liệu gốc phải là 64 bit.")
     
