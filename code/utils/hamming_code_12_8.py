@@ -36,44 +36,56 @@ def encode_hamming12_8(byte):
 def decode_hamming12_8(block):
     """
     Giải mã codeword 12 bit theo Hamming(12,8).
-    Phát hiện và sửa lỗi đơn bit dựa vào tính toán syndrome.
-    
-    Các bước:
-      - Tính các bit syndrome s1, s2, s3, s4 dựa trên các parity check:
-          s1 = p1 XOR d1 XOR d2 XOR d4 XOR d5 XOR d7  (tương đương: bit[0] ^ bit[2] ^ bit[4] ^ bit[6] ^ bit[8] ^ bit[10])
-          s2 = p2 XOR d1 XOR d3 XOR d4 XOR d6 XOR d7  (bit[1] ^ bit[2] ^ bit[5] ^ bit[6] ^ bit[9] ^ bit[10])
-          s3 = p3 XOR d2 XOR d3 XOR d4 XOR d8         (bit[3] ^ bit[4] ^ bit[5] ^ bit[6] ^ bit[11])
-          s4 = p4 XOR d5 XOR d6 XOR d7 XOR d8         (bit[7] ^ bit[8] ^ bit[9] ^ bit[10] ^ bit[11])
-      - Gộp syndrome theo thứ tự (s4 s3 s2 s1) cho ra vị trí bit bị lỗi (nếu không có lỗi thì syndrome = 0).
-    
-    Sau đó trích xuất 8 bit dữ liệu từ các vị trí: 3,5,6,7,9,10,11,12 (0-indexed: 2,4,5,6,8,9,10,11).
-    
-    Nếu giá trị syndrome vượt quá số lượng bit trong codeword (tức > 12), điều đó có thể cho thấy lỗi không đơn
-    (hoặc lỗi không thể sửa bằng Hamming(12,8)) và bit lỗi sẽ không được sửa.
+    - Tính syndrome từ 4 bit parity dựa trên các parity check:
+         s1 = p1 XOR d1 XOR d2 XOR d4 XOR d5 XOR d7  (tương đương: bit[0] ^ bit[2] ^ bit[4] ^ bit[6] ^ bit[8] ^ bit[10])
+         s2 = p2 XOR d1 XOR d3 XOR d4 XOR d6 XOR d7  (bit[1] ^ bit[2] ^ bit[5] ^ bit[6] ^ bit[9] ^ bit[10])
+         s3 = p3 XOR d2 XOR d3 XOR d4 XOR d8         (bit[3] ^ bit[4] ^ bit[5] ^ bit[6] ^ bit[11])
+         s4 = p4 XOR d5 XOR d6 XOR d7 XOR d8         (bit[7] ^ bit[8] ^ bit[9] ^ bit[10] ^ bit[11])
+    - Gộp syndrome theo thứ tự (s4 s3 s2 s1) cho ra vị trí lỗi (1-indexed).
+    - Nếu syndrome != 0, ta tạo candidate bằng cách đảo bit tại vị trí (syndrome - 1)
+      và sau đó kiểm tra lại syndrome. Nếu candidate cho ra syndrome 0 thì chấp nhận candidate,
+      nếu không thì không sửa lỗi (giả sử có nhiều hơn 1 lỗi).
+    - Cuối cùng, trích xuất 8 bit dữ liệu từ các vị trí: 3,5,6,7,9,10,11,12 (0-indexed: 2,4,5,6,8,9,10,11).
     """
     if len(block) != 12:
         raise ValueError("Block phải có 12 bit.")
-    bits = list(block)
-    bits = [int(b) for b in bits]
+        
+    # Chuyển chuỗi thành danh sách số nguyên.
+    bits = [int(b) for b in block]
     
+    # Tính các bit syndrome ban đầu.
     s1 = bits[0] ^ bits[2] ^ bits[4] ^ bits[6] ^ bits[8]  ^ bits[10]
     s2 = bits[1] ^ bits[2] ^ bits[5] ^ bits[6] ^ bits[9]  ^ bits[10]
     s3 = bits[3] ^ bits[4] ^ bits[5] ^ bits[6] ^ bits[11]
     s4 = bits[7] ^ bits[8] ^ bits[9] ^ bits[10] ^ bits[11]
     
-    syndrome = s4 * 8 + s3 * 4 + s2 * 2 + s1  # syndrome từ 0 đến 15
+    syndrome = s4 * 8 + s3 * 4 + s2 * 2 + s1  # giá trị nằm trong khoảng 0 đến 15
     if syndrome != 0:
-        # Chuyển syndrome (1-indexed) về chỉ số 0-indexed.
-        error_index = syndrome - 1
+        error_index = syndrome - 1  # chuyển về 0-indexed
         if error_index < len(bits):
-            bits[error_index] = 1 - bits[error_index]
+            # Tạo candidate bằng cách sao chép bits và đảo bit tại error_index.
+            candidate = bits.copy()
+            candidate[error_index] = 1 - candidate[error_index]
+            
+            # Tính lại syndrome cho candidate.
+            s1_c = candidate[0] ^ candidate[2] ^ candidate[4] ^ candidate[6] ^ candidate[8]  ^ candidate[10]
+            s2_c = candidate[1] ^ candidate[2] ^ candidate[5] ^ candidate[6] ^ candidate[9]  ^ candidate[10]
+            s3_c = candidate[3] ^ candidate[4] ^ candidate[5] ^ candidate[6] ^ candidate[11]
+            s4_c = candidate[7] ^ candidate[8] ^ candidate[9] ^ candidate[10] ^ candidate[11]
+            syndrome_candidate = s4_c * 8 + s3_c * 4 + s2_c * 2 + s1_c
+            
+            if syndrome_candidate == 0:
+                # Chỉ sửa nếu candidate khôi phục được block.
+                bits = candidate
+            # Nếu candidate không khôi phục được block (syndrome_candidate != 0),
+            # có nghĩa có nhiều lỗi -> không sửa lỗi.
         else:
             print("Warning: Syndrome out of range (", syndrome, 
                   "). Cannot correct error in block:", block)
     
-    # Trích xuất 8 bit dữ liệu từ các vị trí: 3,5,6,7,9,10,11,12 (indices 2,4,5,6,8,9,10,11)
-    data = [str(bits[i]) for i in [2, 4, 5, 6, 8, 9, 10, 11]]
-    return "".join(data)
+    # Trích xuất 8 bit dữ liệu từ các vị trí: 3,5,6,7,9,10,11,12 (indices 2, 4, 5, 6, 8, 9, 10, 11)
+    data = "".join(str(bits[i]) for i in [2, 4, 5, 6, 8, 9, 10, 11])
+    return data
 
 def compute_parity_hamming_12_8(data_bit_str):
     """

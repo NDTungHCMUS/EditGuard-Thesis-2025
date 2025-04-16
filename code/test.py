@@ -241,6 +241,10 @@ def main():
         algo_type = "REED-SOLOMON 8"
     elif (type_correction_code == 3):
         algo_type = "HAMMING-CODE 74"
+    elif (type_correction_code == 4):
+        algo_type = "HAMMING-CODE 128"
+    elif (type_correction_code == 5):
+        algo_type = "LDPC"
     print(f"FINAL RESULT:\n BIT_ERR WITHOUT CORRECTION IS: {avg_bit_error_without_correction} \n BIT_ERR WITH {algo_type} CORRECTION METHOD IS: {avg_bit_error_with_correction}")
 
     # ----- ORIGINAL -----
