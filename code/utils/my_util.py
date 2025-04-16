@@ -154,7 +154,7 @@ def get_copyright_metadata_from_list_with_correction(list_message, list_recmessa
         elif (type_correction_code == 3):
             a = recover_original_hamming_74(list_input_to_correct[i])
         elif (type_correction_code == 4):
-            a = recover_original_hamming_12_8(list_input_to_correct[i], H)
+            a = recover_original_hamming_12_8(list_input_to_correct[i])
         elif (type_correction_code == 5):
             a = ldpc_decode_bp(list_input_to_correct[i], H)
         else:
