@@ -7,7 +7,9 @@ import os
 import math
 from .reed_solomons_16 import compute_parity_16, recover_original_16
 from .reed_solomons_8 import compute_parity_8, recover_original_8
-from .hamming_code import compute_parity_hamming_74, recover_original_hamming_74
+from .hamming_code_7_4 import compute_parity_hamming_74, recover_original_hamming_74
+from .hamming_code_12_8 import compute_parity_hamming_12_8, recover_original_hamming_12_8
+from .LDPC import ldpc_encode, ldpc_decode_bp
 from .util import save_img, tensor2img, decoded_message_error_rate
 
 ## Explaination: Load copyright and metadata from file -> Return list of dictionary ({'copyright': str, 'metadata': list})
@@ -49,7 +51,7 @@ def load_copyright_metadata_from_files(file_path):
     return results
 
 ## Explaination: Compute correction code for copyright and metadata -> Return list of dictionary ({'copyright': str, 'metadata': list})
-def compute_parity_from_list_copyright_metadata(list_copyright_metadata, type_correction_code = 1):
+def compute_parity_from_list_copyright_metadata(list_copyright_metadata, type_correction_code = 1, P = -1, H = -1):
     result = []
     for i in range(len(list_copyright_metadata)):
         if (type_correction_code == 1):
@@ -58,6 +60,10 @@ def compute_parity_from_list_copyright_metadata(list_copyright_metadata, type_co
             copyright = compute_parity_8(list_copyright_metadata[i]["copyright"])
         elif (type_correction_code == 3):
             copyright = compute_parity_hamming_74(list_copyright_metadata[i]["copyright"])
+        elif (type_correction_code == 4):
+            copyright = compute_parity_hamming_12_8(list_copyright_metadata[i]["copyright"])
+        elif (type_correction_code == 5):
+            copyright = ldpc_encode(list_copyright_metadata[i]["copyright"], P)
         else:
             copyright = "0" * 64
         parity_data = {
@@ -123,7 +129,7 @@ def get_copyright_metadata_from_list_without_correction(list_message, list_recme
     return copyright_before, copyright_after, metadata_before, metadata_after
 
 ## Explaination: Take copyright, metadata (before and after) from lists (with correction)
-def get_copyright_metadata_from_list_with_correction(list_message, list_recmessage, type_correction_code = 1):
+def get_copyright_metadata_from_list_with_correction(list_message, list_recmessage, type_correction_code = 1, H = -1):
     copyright_before = list_message[0]
     metadata_before = ""
     for i in range(2, len(list_message), 2):
@@ -147,6 +153,10 @@ def get_copyright_metadata_from_list_with_correction(list_message, list_recmessa
             a = recover_original_8(list_input_to_correct[i])
         elif (type_correction_code == 3):
             a = recover_original_hamming_74(list_input_to_correct[i])
+        elif (type_correction_code == 4):
+            a = recover_original_hamming_12_8(list_input_to_correct[i])
+        elif (type_correction_code == 5):
+            a = ldpc_decode_bp(list_input_to_correct[i], H)
         else:
             a = -1
         if (a == -1):
