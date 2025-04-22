@@ -40,7 +40,13 @@ result_path: "results/ori_result.txt"
 # ----- VN END -----
 
 # ----- VN START -----
-#### correction type: 1 -> Reed-Solomons-16, 2 -> Reed-Solomons-8, 3 -> Hamming-Code-74, 4 -> Hamming-Code-12-8, 5 -> LDPC
+### ======correction type=======
+### 1 -> Reed-Solomons-16
+### 2 -> Reed-Solomons-8
+### 3 -> Hamming-Code-74
+### 4 -> Hamming-Code-12-8
+### 5 -> LDPC
+### =============================
 
 type_correction_code: 1
 # ----- VN END -----
