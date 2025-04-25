@@ -1,3 +1,4 @@
+# ----- VN Start -----
 import random
 import yaml
 from easydict import EasyDict
@@ -44,3 +45,5 @@ if __name__ == "__main__":
           + opt.metadata_length//64
         )
     )
+
+# ----- VN End -----
