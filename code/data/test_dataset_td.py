@@ -21,7 +21,7 @@ class imageTestDataset(data.Dataset):
         self.data_path = opt['data_path']
         self.bit_path = opt['bit_path']
         self.txt_path = self.opt['txt_path']
-        self.num_image = self.opt['num_image']
+        self.num_image = self.opt['num_images']
 
         # ----- VN Start -----
         self.data_split_path = opt['split_path_ori']
@@ -85,7 +85,7 @@ class imageTestDataset(data.Dataset):
     
     def __len__(self):
         # ----- VN Start -----
-        return len(self.image_list_gt * self.num_child_images)  
+        return len(self.image_list_gt) * self.num_child_images
         # ----- ORIGINAL -----
         # return len(self.image_list_gt)
         # ----- VN End -----
