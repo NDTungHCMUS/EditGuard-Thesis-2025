@@ -65,6 +65,7 @@ datasets:
     # ----- VN Start -----
     num_images: 20
     num_child_images: 48
+    need_to_split: True
     num_child_on_width_size: 8
     num_child_on_height_size: 6
     width: 512
