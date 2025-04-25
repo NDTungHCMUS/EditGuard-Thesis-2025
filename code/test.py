@@ -154,7 +154,7 @@ def main():
     P_GLOBAL, H_GLOBAL = generate_ldpc_matrices(k=64, m=64, row_weight=3)
     number_of_64bits_blocks_copyright = opt['copyright_length'] // 64
     number_of_64bits_blocks_phash = opt['phash_length'] // 64
-    number_of_64bits_blocks_metadata = opt['copyright_length'] // 64
+    number_of_64bits_blocks_metadata = opt['metadata_length'] // 64
     number_of_64bits_blocks_input = opt['metadata_length'] // 64 + opt['copyright_length'] // 64 + opt['phash_length'] // 64
     list_dict_copyright_phash_metadata = load_copyright_phash_metadata_from_files(opt['datasets']['TD']['copyright_path'], number_of_64bits_blocks_copyright, number_of_64bits_blocks_phash, number_of_64bits_blocks_metadata)
     list_dict_parity_copyright_phash_metadata = compute_parity_from_list_copyright_phash_metadata(list_dict_copyright_phash_metadata, number_of_64bits_blocks_copyright, number_of_64bits_blocks_phash, number_of_64bits_blocks_metadata, type_correction_code = type_correction_code, P = P_GLOBAL, H = H_GLOBAL)
