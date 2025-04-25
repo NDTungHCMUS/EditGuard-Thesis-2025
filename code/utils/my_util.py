@@ -181,9 +181,9 @@ def compute_message(index, dict_copyright_phash_metadata, dict_parity_copyright_
     # chọn dict gốc hay dict_parity
     if group % 2 == 1:
         # parity
-        source_dict = dict_parity_copyright_phash_metadata
+        source_dict = dict_parity_copyright_phash_metadata[index]
     else:
-        source_dict = dict_copyright_phash_metadata
+        source_dict = dict_copyright_phash_metadata[index]
 
     # trả về block
     try:
