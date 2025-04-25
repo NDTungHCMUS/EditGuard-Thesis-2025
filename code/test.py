@@ -182,7 +182,7 @@ def main():
                 'GT': val_data['GT'][i].unsqueeze(0)
             }
             model.feed_data(child_data)
-            message = compute_message(i, list_dict_copyright_phash_metadata, list_dict_parity_copyright_phash_metadata, random_walk_sequence, number_of_64bits_blocks_copyright, number_of_64bits_blocks_phash, number_of_64bits_blocks_metadata)
+            message = compute_message(i, list_dict_copyright_phash_metadata[parent_image_id], list_dict_parity_copyright_phash_metadata[parent_image_id], random_walk_sequence, number_of_64bits_blocks_copyright, number_of_64bits_blocks_phash, number_of_64bits_blocks_metadata)
             if message != -1:
                 I_ori, I_container, messageTensor = model.embed(message)
                 list_messageTensor.append(messageTensor)
