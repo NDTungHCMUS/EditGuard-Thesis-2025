@@ -12,90 +12,184 @@ from .hamming_code_12_8 import compute_parity_hamming_12_8, recover_original_ham
 from .LDPC import ldpc_encode, ldpc_decode_bp
 from .util import save_img, tensor2img, decoded_message_error_rate
 
-## Explaination: Load copyright and metadata from file -> Return list of dictionary ({'copyright': str, 'metadata': list})
-def load_copyright_metadata_from_files(file_path):
+def load_copyright_phash_metadata_from_files(
+    file_path: str,
+    number_of_64bits_blocks_copyright: int,
+    number_of_64bits_blocks_phash: int,
+    number_of_64bits_blocks_metadata: int
+) -> list[dict]:
+    """
+    Đọc file có định dạng:
+      0001
+      <copyright block 1>
+      ...
+      <copyright block N>
+      <phash block 1>
+      ...
+      <phash block M>
+      <metadata block 1>
+      ...
+      <metadata block K>
+      0002
+      ...
+    Trả về list các dict với keys: "copyright", "phash", "metadata".
+    """
     results = []
-    with open(file_path, 'r') as file:
-        lines = file.read().splitlines()  # reads lines without newline characters
-    
+    # Đọc vào và loại bỏ newline, giữ nguyên thứ tự
+    with open(file_path, 'r') as f:
+        lines = [line.strip() for line in f if line.strip()]
+
     i = 0
+    total_blocks = (
+        number_of_64bits_blocks_copyright
+        + number_of_64bits_blocks_phash
+        + number_of_64bits_blocks_metadata
+    )
+
     while i < len(lines):
-        # The first line of a block is the image number (e.g. "0001"). Skip it.
+        # 1) dòng image number
         if len(lines[i]) == 4 and lines[i].isdigit():
             i += 1
         else:
-            # If the expected image number is not found, you may handle the error as needed.
-            raise ValueError(f"Expected an image number at line {i+1}, got: {lines[i]}")
-        
-        # Check if there is at least one 64-bit string for this image.
-        if i >= len(lines):
-            break
-        
-        # The first 64-bit string is considered as copyright.
-        current_copyright = lines[i]
-        i += 1
-        current_metadata = []
-        
-        # All subsequent lines until the next image number or end of file are metadata.
-        while i < len(lines):
-            if len(lines[i]) == 4 and lines[i].isdigit():
-                break
-            current_metadata.append(lines[i])
-            i += 1
-        
+            raise ValueError(f"Expected image-number (4 digits) at line {i+1}, got: {lines[i]!r}")
+
+        # 2) kiểm tra đủ số dòng còn lại để đọc hết 3 phần
+        if i + total_blocks > len(lines):
+            raise EOFError(f"Not enough lines for all blocks at image starting line {i}")
+
+        # 3) đọc từng phần theo số block
+        copyright_list = lines[i : i + number_of_64bits_blocks_copyright]
+        i += number_of_64bits_blocks_copyright
+
+        phash_list = lines[i : i + number_of_64bits_blocks_phash]
+        i += number_of_64bits_blocks_phash
+
+        metadata_list = lines[i : i + number_of_64bits_blocks_metadata]
+        i += number_of_64bits_blocks_metadata
+
         results.append({
-            "copyright": current_copyright,
-            "metadata": current_metadata
+            "copyright": copyright_list,
+            "phash":    phash_list,
+            "metadata": metadata_list
         })
-    
+
     return results
 
-## Explaination: Compute correction code for copyright and metadata -> Return list of dictionary ({'copyright': str, 'metadata': list})
-def compute_parity_from_list_copyright_metadata(list_copyright_metadata, type_correction_code = 1, P = -1, H = -1):
-    result = []
-    for i in range(len(list_copyright_metadata)):
-        if (type_correction_code == 1):
-            copyright = compute_parity_16(list_copyright_metadata[i]["copyright"])
-        elif (type_correction_code == 2):
-            copyright = compute_parity_8(list_copyright_metadata[i]["copyright"])
-        elif (type_correction_code == 3):
-            copyright = compute_parity_hamming_74(list_copyright_metadata[i]["copyright"])
-        elif (type_correction_code == 4):
-            copyright = compute_parity_hamming_12_8(list_copyright_metadata[i]["copyright"])
-        elif (type_correction_code == 5):
-            copyright = ldpc_encode(list_copyright_metadata[i]["copyright"], P)
+
+def compute_parity_from_list_copyright_phash_metadata(
+    list_copyright_metadata,
+    number_of_64bits_blocks_copyright,
+    number_of_64bits_blocks_phash,
+    number_of_64bits_blocks_metadata,
+    type_correction_code=1,
+    P=-1,
+    H=-1
+):
+    """
+    Với mỗi dict trong list_copyright_metadata (có keys "copyright", "phash", "metadata",
+    mỗi key chứa một list các block 64‑bit):
+      - Kiểm tra số block đúng với tham số number_of_64bits_...
+      - Tính parity/ECC theo type_correction_code (và P/H nếu cần)
+    Trả về list các dict cùng key nhưng chứa parity code.
+    """
+    def _encode(block: str) -> str:
+        if   type_correction_code == 1:
+            return compute_parity_16(block)
+        elif type_correction_code == 2:
+            return compute_parity_8(block)
+        elif type_correction_code == 3:
+            return compute_parity_hamming_74(block)
+        elif type_correction_code == 4:
+            return compute_parity_hamming_12_8(block)
+        elif type_correction_code == 5:
+            return ldpc_encode(block, P)
         else:
-            copyright = "0" * 64
-        parity_data = {
-            "copyright": copyright,
-            "metadata": []
-        }
-        for metadata in list_copyright_metadata[i]["metadata"]:
-            if (type_correction_code == 1):
-                parity_metadata = compute_parity_16(metadata)
-            elif (type_correction_code == 2):
-                parity_metadata = compute_parity_8(metadata)
-            elif (type_correction_code == 3):
-                parity_metadata = compute_parity_hamming_74(metadata)
-            elif (type_correction_code == 4):
-                parity_metadata = compute_parity_hamming_12_8(metadata)
-            elif (type_correction_code == 5):
-                parity_metadata = ldpc_encode(metadata, P)
-            else:
-                parity_metadata = "0" * 64
-            parity_data["metadata"].append(parity_metadata)
-        result.append(parity_data)
-    return result
+            return "0" * len(block)
+
+    results = []
+    for idx, item in enumerate(list_copyright_metadata):
+        # Validate độ dài từng phần
+        if len(item.get("copyright", [])) != number_of_64bits_blocks_copyright:
+            raise ValueError(
+                f"Item {idx}: expected {number_of_64bits_blocks_copyright} copyright blocks, "
+                f"got {len(item.get('copyright', []))}"
+            )
+        if len(item.get("phash", [])) != number_of_64bits_blocks_phash:
+            raise ValueError(
+                f"Item {idx}: expected {number_of_64bits_blocks_phash} phash blocks, "
+                f"got {len(item.get('phash', []))}"
+            )
+        if len(item.get("metadata", [])) != number_of_64bits_blocks_metadata:
+            raise ValueError(
+                f"Item {idx}: expected {number_of_64bits_blocks_metadata} metadata blocks, "
+                f"got {len(item.get('metadata', []))}"
+            )
+
+        # Tính parity cho từng phần
+        parity_copyright = [
+            _encode(block) for block in item["copyright"]
+        ]
+        parity_phash    = [
+            _encode(block) for block in item["phash"]
+        ]
+        parity_metadata = [
+            _encode(block) for block in item["metadata"]
+        ]
+
+        results.append({
+            "copyright": parity_copyright,
+            "phash":    parity_phash,
+            "metadata": parity_metadata
+        })
+
+    return results
+
+# Convert index to position in the random walk sequence
+## Return (index, type) where type = 0: copyright, 1: parity_copyright, 2: phash, 3: parity_phash, 4: metadata, 5: parity_metadata
+def convert_index_to_position(index, random_walk_sequence, number_of_64bits_blocks_copyright, number_of_64bits_blocks_phash, number_of_64bits_blocks_metadata):
+    for i in range(len(random_walk_sequence)):
+        if (random_walk_sequence[i] == index):
+            if (i < number_of_64bits_blocks_copyright):
+                return i, 0
+            elif (i < 2 * number_of_64bits_blocks_copyright):
+                return i - number_of_64bits_blocks_copyright, 1
+            elif (i < 2 * number_of_64bits_blocks_copyright + number_of_64bits_blocks_phash):
+                return i - 2 * number_of_64bits_blocks_copyright, 2
+            elif (i < 2 * number_of_64bits_blocks_copyright + 2 * number_of_64bits_blocks_phash):
+                return i - 2 * number_of_64bits_blocks_copyright - number_of_64bits_blocks_phash, 3
+            elif (i < 2 * number_of_64bits_blocks_copyright + 2 * number_of_64bits_blocks_phash + number_of_64bits_blocks_metadata):
+                return i - 2 * number_of_64bits_blocks_copyright - 2 * number_of_64bits_blocks_phash, 4
+            elif (i < 2 * number_of_64bits_blocks_copyright + 2 * number_of_64bits_blocks_phash + 2 * number_of_64bits_blocks_metadata):
+                return i - 2 * number_of_64bits_blocks_copyright - 2 * number_of_64bits_blocks_phash - number_of_64bits_blocks_metadata, 5
+    return -1, -1
 
 ## Explaination: Return message correspond to dictionary (copyright or metadata)
-def compute_message(index, dict_copyright_metadata, dict_parity_copyright_metadata):
-    if (index == 0):
-        return dict_copyright_metadata['copyright']
-    elif (index == 1):
-        return dict_parity_copyright_metadata['copyright']
-    elif (index % 2 == 0):
-        return dict_copyright_metadata['metadata'][index // 2 - 1]
-    return dict_parity_copyright_metadata['metadata'][index // 2 - 1]
+def compute_message(index, dict_copyright_phash_metadata, dict_parity_copyright_phash_metadata, random_walk_sequence, number_of_64bits_blocks_copyright, number_of_64bits_blocks_phash, number_of_64bits_blocks_metadata):
+    n_c = number_of_64bits_blocks_copyright
+    n_ph = number_of_64bits_blocks_phash
+    n_m = number_of_64bits_blocks_metadata
+
+    index_in_dict, group = convert_index_to_position(index, random_walk_sequence, n_c, n_ph, n_m)
+
+    # Nếu không tìm thấy vị trí trong dict, trả về -1
+    if (index_in_dict == -1 or group == -1):
+        return -1
+    
+    keys = ["copyright", "phash", "metadata"]
+    key = keys[group // 2]
+
+    # chọn dict gốc hay dict_parity
+    if group % 2 == 1:
+        # parity
+        source_dict = dict_parity_copyright_phash_metadata
+    else:
+        source_dict = dict_copyright_phash_metadata
+
+    # trả về block
+    try:
+        return source_dict[key][index_in_dict]
+    except (KeyError, IndexError) as e:
+        return -1
 
 ## Explaination: Convert bit string to numpy type
 def bit_string_to_messagenp(bit_string, batch_size=1):
@@ -120,62 +214,121 @@ def bit_string_to_messagenp(bit_string, batch_size=1):
         message = np.tile(message, (batch_size, 1))
     return message
 
-## Explaination: Take copyright, metadata (before and after) from lists (without correction)
-def get_copyright_metadata_from_list_without_correction(list_message, list_recmessage):
-    copyright_before = list_message[0]
-    copyright_after = list_recmessage[0]
+## Explaination: Take copyright, phash, metadata (before and after) from lists (without correction)
+def get_copyright_phash_metadata_from_list_without_correction(list_message, list_recmessage, random_walk_sequence, number_of_64bits_blocks_copyright, number_of_64bits_blocks_phash, number_of_64bits_blocks_metadata):
+    copyright_before = ""
+    copyright_after = ""
+    phash_before = ""
+    phash_after = ""
     metadata_before = ""
     metadata_after = ""
-    for i in range(2, len(list_message), 2):
-        metadata_before = metadata_before + list_message[i]
-    for i in range(2, len(list_recmessage), 2):
-        metadata_after = metadata_after + list_recmessage[i]
-    return copyright_before, copyright_after, metadata_before, metadata_after
+    for i in range(0, number_of_64bits_blocks_copyright):
+        copyright_before = copyright_before + list_message[random_walk_sequence[i]]
+        copyright_after = copyright_after + list_recmessage[random_walk_sequence[i]]
+    for i in range(2 * number_of_64bits_blocks_copyright, 2 * number_of_64bits_blocks_copyright + number_of_64bits_blocks_phash):
+        phash_before = phash_before + list_message[random_walk_sequence[i]]
+        phash_after = phash_after + list_recmessage[random_walk_sequence[i]]
+    for i in range(2 * number_of_64bits_blocks_copyright + 2 * number_of_64bits_blocks_phash, 2 * number_of_64bits_blocks_copyright + 2 * number_of_64bits_blocks_phash + number_of_64bits_blocks_metadata):
+        metadata_before = metadata_before + list_message[random_walk_sequence[i]]
+        metadata_after = metadata_after + list_recmessage[random_walk_sequence[i]]
+    return copyright_before, copyright_after, phash_before, phash_after, metadata_before, metadata_after
 
 ## Explaination: Take copyright, metadata (before and after) from lists (with correction)
-def get_copyright_metadata_from_list_with_correction(list_message, list_recmessage, type_correction_code = 1, H = -1):
-    copyright_before = list_message[0]
-    metadata_before = ""
-    for i in range(2, len(list_message), 2):
-        metadata_before = metadata_before + list_message[i]
+def get_copyright_phash_metadata_from_list_with_correction(
+    list_message,
+    list_recmessage,
+    random_walk_sequence,
+    num_copyright_blocks,
+    num_phash_blocks,
+    num_metadata_blocks,
+    type_correction_code=1,
+    H=None
+):
+    """
+    Extracts and error-corrects copyright, pHash, and metadata blocks.
 
-    num_child_images = len(list_message)
-    list_input_to_correct = []
-    # Build string to do reed-solomons
-    for i in range(0, num_child_images, 2):
-        list_input_to_correct.append(list_recmessage[i])
-    for i in range(1, num_child_images, 2):
-        list_input_to_correct[i//2] += list_recmessage[i]
-    print("LIST SOLOMON:", list_input_to_correct)
-
-    cnt_cannot_solve = 0
-    metadata_after = ""
-    for i in range(0, num_child_images // 2):
-        if (type_correction_code == 1):
-            a = recover_original_16(list_input_to_correct[i])
-        elif (type_correction_code == 2):
-            a = recover_original_8(list_input_to_correct[i])
-        elif (type_correction_code == 3):
-            a = recover_original_hamming_74(list_input_to_correct[i])
-        elif (type_correction_code == 4):
-            a = recover_original_hamming_12_8(list_input_to_correct[i])
-        elif (type_correction_code == 5):
-            a = ldpc_decode_bp(list_input_to_correct[i], H)
+    Returns:
+      (copyright_before, copyright_after,
+       phash_before,     phash_after,
+       metadata_before,  metadata_after,
+       cnt_cannot_solve)
+    """
+    # Helper to dispatch to the right decoder
+    def _recover(codeword):
+        if type_correction_code == 1:
+            return recover_original_16(codeword)
+        elif type_correction_code == 2:
+            return recover_original_8(codeword)
+        elif type_correction_code == 3:
+            return recover_original_hamming_74(codeword)
+        elif type_correction_code == 4:
+            return recover_original_hamming_12_8(codeword)
+        elif type_correction_code == 5:
+            return ldpc_decode_bp(codeword, H)
         else:
-            a = -1
-        if (a == -1):
-            print("Cannot solve Reed Solomon")
+            return -1
+
+    copyright_before = ""
+    copyright_after  = ""
+    phash_before     = ""
+    phash_after      = ""
+    metadata_before  = ""
+    metadata_after   = ""
+    cnt_cannot_solve = 0
+
+    # ——— COPYRIGHT BLOCKS ———
+    for i in range(num_copyright_blocks):
+        data_idx   = random_walk_sequence[i]
+        parity_idx = random_walk_sequence[num_copyright_blocks + i]
+        # accumulate “before”
+        copyright_before += list_message[data_idx]
+        # build the codeword and attempt correction
+        codeword = list_recmessage[data_idx] + list_recmessage[parity_idx]
+        recovered = _recover(codeword)
+        if recovered == -1:
             cnt_cannot_solve += 1
-            if (i == 0):
-                copyright_after = list_input_to_correct[i][:64]
-            else:
-                metadata_after = metadata_after + list_input_to_correct[i][:64]
-        else: 
-            if (i == 0):
-                copyright_after = a[:64]
-            else:
-                metadata_after = metadata_after + a[:64]
-    return copyright_before, copyright_after, metadata_before, metadata_after, cnt_cannot_solve
+            # fall back to the (possibly corrupted) data portion
+            copyright_after += list_recmessage[data_idx][:64]
+        else:
+            copyright_after += recovered[:64]
+
+    # ——— pHASH BLOCKS ———
+    phash_offset       = 2 * num_copyright_blocks
+    phash_parity_start = phash_offset + num_phash_blocks
+    for i in range(num_phash_blocks):
+        data_idx   = random_walk_sequence[phash_offset + i]
+        parity_idx = random_walk_sequence[phash_parity_start + i]
+        phash_before += list_message[data_idx]
+        codeword     = list_recmessage[data_idx] + list_recmessage[parity_idx]
+        recovered    = _recover(codeword)
+        if recovered == -1:
+            cnt_cannot_solve += 1
+            phash_after += list_recmessage[data_idx][:64]
+        else:
+            phash_after += recovered[:64]
+
+    # ——— METADATA BLOCKS ———
+    meta_offset       = 2 * num_copyright_blocks + 2 * num_phash_blocks
+    meta_parity_start = meta_offset + num_metadata_blocks
+    for i in range(num_metadata_blocks):
+        data_idx   = random_walk_sequence[meta_offset + i]
+        parity_idx = random_walk_sequence[meta_parity_start + i]
+        metadata_before += list_message[data_idx]
+        codeword       = list_recmessage[data_idx] + list_recmessage[parity_idx]
+        recovered      = _recover(codeword)
+        if recovered == -1:
+            cnt_cannot_solve += 1
+            metadata_after += list_recmessage[data_idx][:64]
+        else:
+            metadata_after += recovered[:64]
+
+    return (
+        copyright_before, copyright_after,
+        phash_before,     phash_after,
+        metadata_before,  metadata_after,
+        cnt_cannot_solve
+    )
+
 
 ## Explaination: Convert tensor to binary string
 def tensor_to_binary_string(tensor):
@@ -380,24 +533,36 @@ def split_torch_tensors_4d(parent_container_grid, num_child_on_width_size, num_c
     return patches
 
 ## Explaination: Write output information to file
-def write_extracted_messages(parent_image_id, copyright_before,
-                             copyright_after, metadata_before,
-                             metadata_after, out_file_path):
+def write_extracted_messages(
+    parent_image_id,
+    copyright_before,
+    copyright_after,
+    phash_before,
+    phash_after,
+    metadata_before,
+    metadata_after,
+    out_file_path
+):
     """
     Ghi ra file thông tin trích xuất cho một ảnh với định dạng:
     
     Image_ID: <parent_image_id, định dạng 4 chữ số>
-    Copyright Length: <số bit trong chuỗi copyright (64)>
-        Copyright Before: <dãy 64 bit>
-        Copyright After: <dãy 64 bit>
-        Copyright Bit Error: <số bit khác nhau giữa copyright trước và sau chia cho 64>
+    Copyright Length: <số bit trong chuỗi copyright (bội số của 64)>
+        Copyright Before: <dãy bit>
+        Copyright After: <dãy bit>
+        Copyright Bit Error: <số bit khác nhau giữa copyright trước và sau chia cho độ dài>
         Copyright Wrong Position: <list các vị trí khác nhau>
-    Metadata Length: <số bit trong metadata>
+    pHash Length: <số bit trong chuỗi pHash (bội số của 64)>
+        pHash Before: <dãy bit>
+        pHash After: <dãy bit>
+        pHash Bit Error: <số bit khác nhau giữa pHash trước và sau chia cho độ dài>
+        pHash Wrong Position: <list các vị trí khác nhau>
+    Metadata Length: <số bit trong metadata (bội số của 64)>
         Metadata Before: <dãy metadata, mỗi 64 bit cách nhau bởi dấu |>
         Metadata After: <dãy metadata, mỗi 64 bit cách nhau bởi dấu |>
         Metadata Bit Error: <số bit khác nhau giữa metadata trước và sau chia cho tổng số bit metadata>
         Metadata Wrong Position: <list các vị trí khác nhau>
-        General Bit Length: <tổng số bit trong (copyright + metadata)>
+    General Bit Length: <tổng số bit trong (copyright + metadata)>
         General Bit Before: <dãy (copyright + metadata) trước được chia theo 64-bit với dấu |>
         General Bit After: <dãy (copyright + metadata) sau được chia theo 64-bit với dấu |>
         General Bit Error: <số bit khác nhau trong toàn bộ dãy chia cho tổng số bit>
@@ -405,10 +570,12 @@ def write_extracted_messages(parent_image_id, copyright_before,
     
     Args:
         parent_image_id (int): Số nhận dạng ảnh gốc (0, 1, 2, ...).
-        copyright_before (str): Dãy 64 bit trước khi sửa.
-        copyright_after (str): Dãy 64 bit sau khi sửa.
-        metadata_before (str): Dãy metadata trước khi sửa (độ dài bội số của 64).
-        metadata_after (str): Dãy metadata sau khi sửa (độ dài bội số của 64).
+        copyright_before (str): Dãy bit copyright trước khi sửa (bội số của 64).
+        copyright_after (str): Dãy bit copyright sau khi sửa (bội số của 64).
+        phash_before (str): Dãy bit pHash trước khi sửa (bội số của 64).
+        phash_after (str): Dãy bit pHash sau khi sửa (bội số của 64).
+        metadata_before (str): Dãy metadata trước khi sửa (bội số của 64).
+        metadata_after (str): Dãy metadata sau khi sửa (bội số của 64).
         out_file_path (str): Đường dẫn đến file output.
         
     Returns:
@@ -417,70 +584,78 @@ def write_extracted_messages(parent_image_id, copyright_before,
     # Format parent image id thành chuỗi 4 chữ số.
     image_id_str = f"{parent_image_id:04d}"
     
-    # Kiểm tra độ dài của copyright và metadata.
-    if len(copyright_before) != 64 or len(copyright_after) != 64:
-        raise ValueError("Copyright trước và sau phải có đúng 64 bit.")
+    # Kiểm tra độ dài đầu vào đều là bội số của 64
+    for name, before, after in [
+        ("Copyright", copyright_before, copyright_after),
+        ("pHash", phash_before, phash_after),
+        ("Metadata", metadata_before, metadata_after)
+    ]:
+        if len(before) % 64 != 0 or len(after) % 64 != 0:
+            raise ValueError(f"{name} trước và sau phải là bội số của 64 bit.")
     
-    if len(metadata_before) % 64 != 0 or len(metadata_after) % 64 != 0:
-        raise ValueError("Metadata trước và sau phải là bội số của 64 bit.")
+    # Tính toán lỗi bit cho từng phần
+    def bit_diff_stats(before, after):
+        length = len(before)
+        positions = [i for i in range(length) if before[i] != after[i]]
+        error_rate = len(positions) / length
+        return length, positions, error_rate
     
-    # Tính toán lỗi bit cho copyright.
-    copyright_diff_positions = [i for i in range(64) 
-                                if copyright_before[i] != copyright_after[i]]
-    copyright_diff_count = len(copyright_diff_positions)
-    copyright_bit_error = copyright_diff_count / 64
+    cp_len,   cp_pos,   cp_err   = bit_diff_stats(copyright_before, copyright_after)
+    ph_len,   ph_pos,   ph_err   = bit_diff_stats(phash_before, phash_after)
+    md_len,   md_pos,   md_err   = bit_diff_stats(metadata_before, metadata_after)
     
-    # Tính toán lỗi bit cho metadata.
-    metadata_len = len(metadata_before)
-    metadata_diff_positions = [i for i in range(metadata_len)
-                               if metadata_before[i] != metadata_after[i]]
-    metadata_diff_count = len(metadata_diff_positions)
-    metadata_bit_error = metadata_diff_count / metadata_len
-    
-    # Tính toán lỗi bit cho toàn bộ dãy (copyright + metadata).
-    combined_before = copyright_before + metadata_before
-    combined_after = copyright_after + metadata_after
-    combined_length = len(combined_before)  # = 64 + metadata_len
-    general_diff_positions = [i for i in range(combined_length)
-                              if combined_before[i] != combined_after[i]]
-    combined_diff_count = len(general_diff_positions)
-    general_bit_error = combined_diff_count / combined_length
+    # Tính toán lỗi bit cho toàn bộ dãy (copyright + metadata)
+    combined_before = copyright_before + phash_before + metadata_before
+    combined_after  = copyright_after  + phash_after + metadata_after
+    gen_len, gen_pos, gen_err = bit_diff_stats(combined_before, combined_after)
 
-    # Helper function: format bit string in blocks of 64 separated by " | "
+    # Helper: format bit string in blocks of 64 separated by " | "
     def format_in_blocks(bit_str, block_size=64):
-        return " | ".join([bit_str[i:i+block_size] for i in range(0, len(bit_str), block_size)])
+        return " | ".join(
+            bit_str[i:i+block_size] for i in range(0, len(bit_str), block_size)
+        )
     
-    # Format metadata and general bit strings.
-    metadata_before_formatted = format_in_blocks(metadata_before)
-    metadata_after_formatted  = format_in_blocks(metadata_after)
-    general_before_formatted  = format_in_blocks(combined_before)
-    general_after_formatted   = format_in_blocks(combined_after)
+    copyright_before_fmt = format_in_blocks(copyright_before)
+    copyright_after_fmt  = format_in_blocks(copyright_after)
+    phash_before_fmt    = format_in_blocks(phash_before)
+    phash_after_fmt     = format_in_blocks(phash_after)
+    metadata_before_fmt = format_in_blocks(metadata_before)
+    metadata_after_fmt  = format_in_blocks(metadata_after)
+    general_before_fmt  = format_in_blocks(combined_before)
+    general_after_fmt   = format_in_blocks(combined_after)
     
-    # Ghi thông tin ra file theo định dạng mới.
+    # Ghi thông tin ra file
     with open(out_file_path, 'a') as f:
         f.write(f"Image_ID: {image_id_str}\n")
         
         # Copyright block
-        f.write("Copyright Length: 64\n")
-        f.write(f"    Copyright Before: {copyright_before}\n")
-        f.write(f"    Copyright After: {copyright_after}\n")
-        f.write(f"    Copyright Bit Error: {copyright_bit_error}\n")
-        f.write(f"    Copyright Wrong Position: {copyright_diff_positions}\n")
+        f.write(f"Copyright Length: {cp_len}\n")
+        f.write(f"    Copyright Before: {copyright_before_fmt}\n")
+        f.write(f"    Copyright After: {copyright_after_fmt}\n")
+        f.write(f"    Copyright Bit Error: {cp_err}\n")
+        f.write(f"    Copyright Wrong Position: {cp_pos}\n")
+        
+        # pHash block
+        f.write(f"pHash Length: {ph_len}\n")
+        f.write(f"    pHash Before: {phash_before_fmt}\n")
+        f.write(f"    pHash After: {phash_after_fmt}\n")
+        f.write(f"    pHash Bit Error: {ph_err}\n")
+        f.write(f"    pHash Wrong Position: {ph_pos}\n")
         
         # Metadata block
-        f.write(f"Metadata Length: {metadata_len}\n")
-        f.write(f"    Metadata Before: {metadata_before_formatted}\n")
-        f.write(f"    Metadata After: {metadata_after_formatted}\n")
-        f.write(f"    Metadata Bit Error: {metadata_bit_error}\n")
-        f.write(f"    Metadata Wrong Position: {metadata_diff_positions}\n")
+        f.write(f"Metadata Length: {md_len}\n")
+        f.write(f"    Metadata Before: {metadata_before_fmt}\n")
+        f.write(f"    Metadata After: {metadata_after_fmt}\n")
+        f.write(f"    Metadata Bit Error: {md_err}\n")
+        f.write(f"    Metadata Wrong Position: {md_pos}\n")
         
         # General block
-        f.write(f"    General Bit Length: {combined_length}\n")
-        f.write(f"    General Bit Before: {general_before_formatted}\n")
-        f.write(f"    General Bit After: {general_after_formatted}\n")
-        f.write(f"    General Bit Error: {general_bit_error}\n")
-        f.write(f"General Wrong Position: {general_diff_positions}\n")
+        f.write(f"General Bit Length: {gen_len}\n")
+        f.write(f"    General Bit Before: {general_before_fmt}\n")
+        f.write(f"    General Bit After: {general_after_fmt}\n")
+        f.write(f"    General Bit Error: {gen_err}\n")
+        f.write(f"General Wrong Position: {gen_pos}\n")
         f.write("---------------------\n")
     
-    return general_bit_error
+    return gen_err
 # ----- VN End -----

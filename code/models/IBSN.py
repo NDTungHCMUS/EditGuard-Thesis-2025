@@ -200,7 +200,7 @@ class Model_VSN(BaseModel):
         center = t // 2
         intval = self.gop // 2
 
-        message = torch.Tensor(np.random.choice([-0.5, 0.5], (self.ref_L.shape[0], self.opt['message_length']))).to(self.device)
+        message = torch.Tensor(np.random.choice([-0.5, 0.5], (self.ref_L.shape[0], self.opt['copyright_length']))).to(self.device)
 
         add_noise = self.opt['addnoise']
         add_jpeg = self.opt['addjpeg']
@@ -363,7 +363,7 @@ class Model_VSN(BaseModel):
             print("Shape của Self.secret: ", self.secret[0].shape)
             print("Self.host: ", self.host)
             print("Self.secret: ", self.secret)
-            messagenp = np.random.choice([-0.5, 0.5], (self.ref_L.shape[0], self.opt['message_length']))
+            messagenp = np.random.choice([-0.5, 0.5], (self.ref_L.shape[0], self.opt['copyright_length']))
 
             message = torch.Tensor(messagenp).to(self.device)
 

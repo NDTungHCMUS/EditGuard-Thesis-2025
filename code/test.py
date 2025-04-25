@@ -19,7 +19,7 @@ import numpy as np
 ## Explaination: Import library
 from utils.random_walk import random_walk_unique
 from utils.LDPC import generate_ldpc_matrices
-from utils.my_util import load_copyright_metadata_from_files, tensor_to_binary_string, compute_parity_from_list_copyright_metadata, compute_message, get_copyright_metadata_from_list_with_correction, get_copyright_metadata_from_list_without_correction, split_all_images, combine_torch_tensors_4d, split_torch_tensors_4d, write_extracted_messages
+from utils.my_util import load_copyright_phash_metadata_from_files, tensor_to_binary_string, compute_parity_from_list_copyright_phash_metadata, compute_message, get_copyright_phash_metadata_from_list_with_correction, get_copyright_phash_metadata_from_list_without_correction, split_all_images, combine_torch_tensors_4d, split_torch_tensors_4d, write_extracted_messages
 # ------ VN End ------
 
 def init_dist(backend='nccl', **kwargs):
@@ -119,9 +119,8 @@ def main():
     model = create_model(opt)
     model.load_test(args.ckpt)
       
-    # # # Create Random Walk
-    # # random_walk_squeuence = random_walk_unique()
-    # # print("RANDOM WALK:", random_walk_squeuence)
+    # Create Random Walk
+    random_walk_sequence = random_walk_unique()
 
     # ----- VN Start -----
     ## Explaination: Clear output files after run again
@@ -132,11 +131,32 @@ def main():
     # ----- VN End -----
 
     # ----- VN Start -----
-    ## Explaination: Create copyright, metadata and corresponding parity
+    ## Explaination: Create copyright, metadata and corresponding parity if having correction code
     type_correction_code = opt['type_correction_code']
+    if (type_correction_code == 1):
+        algo_type = "REED-SOLOMON 16"
+    elif (type_correction_code == 2):
+        algo_type = "REED-SOLOMON 8"
+    elif (type_correction_code == 3):
+        algo_type = "HAMMING-CODE 74"
+    elif (type_correction_code == 4):
+        algo_type = "HAMMING-CODE 128"
+    elif (type_correction_code == 5):
+        algo_type = "LDPC"
+    else:
+        algo_type = "NO-CORRECTION"
+
+    if (algo_type == "NO-CORRECTION"):
+        print("NO-CORRECTION CODE, PLEASE CHECK YOUR CODE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        exit(0)
+
     P_GLOBAL, H_GLOBAL = generate_ldpc_matrices(k=64, m=64, row_weight=3)
-    list_dict_copyright_metadata = load_copyright_metadata_from_files(opt['datasets']['TD']['copyright_path'])
-    list_dict_parity_copyright_metadata = compute_parity_from_list_copyright_metadata(list_dict_copyright_metadata, type_correction_code = type_correction_code, P = P_GLOBAL, H = H_GLOBAL)
+    number_of_64bits_blocks_copyright = opt['copyright_length'] // 64
+    number_of_64bits_blocks_phash = opt['phash_length'] // 64
+    number_of_64bits_blocks_metadata = opt['copyright_length'] // 64
+    number_of_64bits_blocks_input = opt['metadata_length'] // 64 + opt['copyright_length'] // 64 + opt['phash_length'] // 64
+    list_dict_copyright_phash_metadata = load_copyright_phash_metadata_from_files(opt['datasets']['TD']['copyright_path'], number_of_64bits_blocks_copyright, number_of_64bits_blocks_phash, number_of_64bits_blocks_metadata)
+    list_dict_parity_copyright_phash_metadata = compute_parity_from_list_copyright_phash_metadata(list_dict_copyright_phash_metadata, number_of_64bits_blocks_copyright, number_of_64bits_blocks_phash, number_of_64bits_blocks_metadata, type_correction_code = type_correction_code, P = P_GLOBAL, H = H_GLOBAL)
     # ----- VN End -----
     
     # ----- VN Start -----
@@ -147,7 +167,6 @@ def main():
     num_child_images = opt['datasets']['TD']['num_child_images']
     num_child_on_width_size = opt['datasets']['TD']['num_child_on_width_size']
     num_child_on_height_size = opt['datasets']['TD']['num_child_on_height_size']
-    number_of_64bits_blocks_input = opt['metadata_length'] // 64 + opt['message_length'] // 64
     bit_error_list_without_correction_code = []
     bit_error_list_with_correction_code = []
 
@@ -162,13 +181,14 @@ def main():
                 'GT': val_data['GT'][i].unsqueeze(0)
             }
             model.feed_data(child_data)
-            if i < number_of_64bits_blocks_input * 2:
-                message = compute_message(i, list_dict_copyright_metadata[parent_image_id], list_dict_parity_copyright_metadata[parent_image_id])
+            message = compute_message(i, list_dict_copyright_phash_metadata, list_dict_parity_copyright_phash_metadata, random_walk_sequence, number_of_64bits_blocks_copyright, number_of_64bits_blocks_phash, number_of_64bits_blocks_metadata)
+            if message != -1:
                 I_ori, I_container, messageTensor = model.embed(message)
                 list_messageTensor.append(messageTensor)
                 list_container.append(I_container)
             else:
                 I_ori, I_container, messageTensor = model.embed(embedMessage = False)
+                list_messageTensor.append(messageTensor)
                 list_container.append(I_ori)
 
         # Step 1.1: Save all child images to folder
@@ -210,7 +230,7 @@ def main():
         list_recmessage = []
         list_message = []
         # Step 5: Extract from all child images
-        for i in range(0, number_of_64bits_blocks_input * 2):
+        for i in range(0, num_child_images):
             recmessage, message = model.extract(list_messageTensor[i], y_forw = list_rec[i], y = list_rec_quantize[i])
             list_recmessage.append(recmessage)
             list_message.append(message)
@@ -220,13 +240,13 @@ def main():
           list_message[i] = tensor_to_binary_string(list_message[i])
           list_recmessage[i] = tensor_to_binary_string(list_recmessage[i])
         
-        # Step 5.2: Get copyright (before, after), metadata (before, after) from list_message, list_recmessage
-        copyright_before, copyright_after, metadata_before, metadata_after = get_copyright_metadata_from_list_without_correction(list_message, list_recmessage)
+        # Step 5.2: Get copyright (before, after), phash (before, after), metadata (before, after) from list_message, list_recmessage
+        copyright_before, copyright_after, phash_before, phash_after, metadata_before, metadata_after = get_copyright_phash_metadata_from_list_without_correction(list_message, list_recmessage)
         bit_error = write_extracted_messages(parent_image_id, copyright_before, copyright_after, metadata_before, metadata_after, opt['datasets']['TD']['copyright_output_without_correction'])
         bit_error_list_without_correction_code.append(bit_error)
 
         # Step 6: Try to fix base on Reed-Solomons        
-        copyright_before, copyright_after, metadata_before, metadata_after, cnt_cannot_solve = get_copyright_metadata_from_list_with_correction(list_message, list_recmessage, type_correction_code = type_correction_code, H = H_GLOBAL)
+        copyright_before, copyright_after, phash_before, phash_after, metadata_before, metadata_after, cnt_cannot_solve = get_copyright_phash_metadata_from_list_with_correction(list_message, list_recmessage, type_correction_code = type_correction_code, H = H_GLOBAL)
         bit_error = write_extracted_messages(parent_image_id, copyright_before, copyright_after, metadata_before, metadata_after, opt['datasets']['TD']['copyright_output_with_correction'])
         bit_error_list_with_correction_code.append(bit_error)
         cnt_cannot_solve_all += cnt_cannot_solve
@@ -236,15 +256,6 @@ def main():
 
     # PRINT RESULT
     # print(f"Cannot Solve {cnt_cannot_solve_all} pairs among {num_images * num_child_images // 2} pairs")
-    algo_type = "REED-SOLOMON 16"
-    if (type_correction_code == 2):
-        algo_type = "REED-SOLOMON 8"
-    elif (type_correction_code == 3):
-        algo_type = "HAMMING-CODE 74"
-    elif (type_correction_code == 4):
-        algo_type = "HAMMING-CODE 128"
-    elif (type_correction_code == 5):
-        algo_type = "LDPC"
     print(f"FINAL RESULT:\n BIT_ERR WITHOUT CORRECTION IS: {avg_bit_error_without_correction} \n BIT_ERR WITH {algo_type} CORRECTION METHOD IS: {avg_bit_error_with_correction}")
 
     # ----- ORIGINAL -----
