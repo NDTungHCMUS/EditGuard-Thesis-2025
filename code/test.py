@@ -244,12 +244,12 @@ def main():
           list_recmessage[i] = tensor_to_binary_string(list_recmessage[i])
         
         # Step 5.2: Get copyright (before, after), phash (before, after), metadata (before, after) from list_message, list_recmessage
-        copyright_before, copyright_after, phash_before, phash_after, metadata_before, metadata_after = get_copyright_phash_metadata_from_list_without_correction(list_message, list_recmessage)
+        copyright_before, copyright_after, phash_before, phash_after, metadata_before, metadata_after = get_copyright_phash_metadata_from_list_without_correction(list_message, list_recmessage, random_walk_sequence, number_of_64bits_blocks_copyright, number_of_64bits_blocks_phash, number_of_64bits_blocks_metadata)
         bit_error = write_extracted_messages(parent_image_id, copyright_before, copyright_after, metadata_before, metadata_after, opt['datasets']['TD']['copyright_output_without_correction'])
         bit_error_list_without_correction_code.append(bit_error)
 
         # Step 6: Try to fix base on Reed-Solomons        
-        copyright_before, copyright_after, phash_before, phash_after, metadata_before, metadata_after, cnt_cannot_solve = get_copyright_phash_metadata_from_list_with_correction(list_message, list_recmessage, type_correction_code = type_correction_code, H = H_GLOBAL)
+        copyright_before, copyright_after, phash_before, phash_after, metadata_before, metadata_after, cnt_cannot_solve = get_copyright_phash_metadata_from_list_with_correction(list_message, list_recmessage, random_walk_sequence, number_of_64bits_blocks_copyright, number_of_64bits_blocks_phash, number_of_64bits_blocks_metadata, type_correction_code = type_correction_code, H = H_GLOBAL)
         bit_error = write_extracted_messages(parent_image_id, copyright_before, copyright_after, metadata_before, metadata_after, opt['datasets']['TD']['copyright_output_with_correction'])
         bit_error_list_with_correction_code.append(bit_error)
         cnt_cannot_solve_all += cnt_cannot_solve
