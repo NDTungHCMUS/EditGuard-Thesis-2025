@@ -120,8 +120,6 @@ def main():
     model = create_model(opt)
     model.load_test(args.ckpt)
       
-    # Create Random Walk
-    random_walk_sequence = random_walk_unique()
 
     # ----- VN Start -----
     ## Explaination: Clear output files after run again
@@ -170,6 +168,10 @@ def main():
     num_child_on_height_size = opt['datasets']['TD']['num_child_on_height_size']
     bit_error_list_without_correction_code = []
     bit_error_list_with_correction_code = []
+
+
+    # Create Random Walk
+    random_walk_sequence = random_walk_unique(number_of_64bits_blocks_input, num_child_images, opt['seed_number'])
 
     ## Explaination: Main flow
     for parent_image_id, val_data in enumerate(val_loader):  

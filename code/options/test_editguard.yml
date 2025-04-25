@@ -55,6 +55,11 @@ result_path: "results/ori_result.txt"
 type_correction_code: 1
 # ----- VN END -----
 
+# ----- VN START -----
+## ==== seed number from user ====
+seed_number: 100
+# ----- VN END -----
+
 #### datasets
 
 datasets:
