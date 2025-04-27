@@ -21,8 +21,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from utils.my_util import bit_string_to_messagenp
 
 import numpy as np
-import random
 import cv2
+import random
 import time
 
 logger = logging.getLogger('base')
@@ -794,7 +794,6 @@ class Model_VSN(BaseModel):
         degrade_shuffle = self.opt['degrade_shuffle']
         with torch.no_grad():
             if add_sdinpaint:
-                import random
                 from PIL import Image
                 prompt = ""
 
@@ -830,7 +829,6 @@ class Model_VSN(BaseModel):
                 y_forw = torch.stack(forw_list, dim=0).float().cuda()
 
             if degrade_shuffle:
-                import random
                 choice = random.randint(0, 2)
                 
                 if choice == 0:
