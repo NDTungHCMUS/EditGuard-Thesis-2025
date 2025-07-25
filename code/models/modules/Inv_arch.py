@@ -537,7 +537,7 @@ class VSN(nn.Module):
         self.channel_in_ho = opt_net['in_nc'] * self.gop
         # ----- VN Start -----
         ## ORIGINAL: self.message_len = opt_net['message_length']
-        self.message_len = 64
+        self.message_len = 30
         # ----- VN End -----
 
         self.block_num = opt_net['block_num']

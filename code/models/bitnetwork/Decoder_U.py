@@ -11,10 +11,10 @@ class DW_Decoder(nn.Module):
         self.down2 = Down(32, 64, blocks=blocks)
         self.down3 = Down(64, 128, blocks=blocks)
 
-        self.down4 = Down(128, 256, blocks=blocks)
+        # self.down4 = Down(128, 256, blocks=blocks)
 
-        self.up3 = UP(256, 128)
-        self.att3 = ResBlock(128 * 2, 128, blocks=blocks, attention=attention)
+        # self.up3 = UP(256, 128)
+        # self.att3 = ResBlock(128 * 2, 128, blocks=blocks, attention=attention)
 
         self.up2 = UP(128, 64)
         self.att2 = ResBlock(64 * 2, 64, blocks=blocks, attention=attention)
@@ -37,13 +37,13 @@ class DW_Decoder(nn.Module):
         d2 = self.down2(d1)
         d3 = self.down3(d2)
 
-        d4 = self.down4(d3)
+        # d4 = self.down4(d3)
 
-        u3 = self.up3(d4)
-        u3 = torch.cat((d3, u3), dim=1)
-        u3 = self.att3(u3)
+        # u3 = self.up3(d4)
+        # u3 = torch.cat((d3, u3), dim=1)
+        # u3 = self.att3(u3)
 
-        u2 = self.up2(u3)
+        u2 = self.up2(d3)
         u2 = torch.cat((d2, u2), dim=1)
         u2 = self.att2(u2)
 

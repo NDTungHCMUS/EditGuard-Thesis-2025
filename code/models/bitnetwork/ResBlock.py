@@ -89,7 +89,7 @@ class CoordAttention(nn.Module):
         temp_c = max(8, in_channels // reduction)
         self.conv1 = nn.Conv2d(in_channels, temp_c, kernel_size=1, stride=1, padding=0)
 
-        self.bn1 = nn.InstanceNorm2d(temp_c)
+        self.bn1 = nn.BatchNorm2d(temp_c)
         self.act1 = h_swish() # nn.SiLU() # nn.Hardswish() # nn.SiLU()
 
         self.conv2 = nn.Conv2d(temp_c, out_channels, kernel_size=1, stride=1, padding=0)
@@ -117,16 +117,16 @@ class BasicBlock(nn.Module):
             self.change = nn.Sequential(
                 nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=1, padding=0,
                           stride=stride, bias=False),
-                nn.InstanceNorm2d(out_channels)
+                nn.BatchNorm2d(out_channels)
             )
 
         self.left = nn.Sequential(
             nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, padding=1,
                       stride=stride, bias=False),
-            nn.InstanceNorm2d(out_channels),
+            nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
             nn.Conv2d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, padding=1, bias=False),
-            nn.InstanceNorm2d(out_channels)
+            nn.BatchNorm2d(out_channels)
         )
 
         if attention == 'se':
@@ -164,19 +164,19 @@ class BottleneckBlock(nn.Module):
             self.change = nn.Sequential(
                 nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=1, padding=0,
                           stride=stride, bias=False),
-                nn.InstanceNorm2d(out_channels)
+                nn.BatchNorm2d(out_channels)
             )
 
         self.left = nn.Sequential(
             nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=1,
                       stride=stride, padding=0, bias=False),
-            nn.InstanceNorm2d(out_channels),
+            nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
             nn.Conv2d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, padding=1, bias=False),
-            nn.InstanceNorm2d(out_channels),
+            nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
             nn.Conv2d(in_channels=out_channels, out_channels=out_channels, kernel_size=1, padding=0, bias=False),
-            nn.InstanceNorm2d(out_channels)
+            nn.BatchNorm2d(out_channels)
         )
 
         if attention == 'se':
@@ -219,4 +219,3 @@ class ResBlock(nn.Module):
 
     def forward(self, x):
         return self.layers(x)
-

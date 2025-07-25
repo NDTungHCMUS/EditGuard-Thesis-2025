@@ -584,14 +584,6 @@ def write_extracted_messages(
     # Format parent image id thành chuỗi 4 chữ số.
     image_id_str = f"{parent_image_id:04d}"
     
-    # Kiểm tra độ dài đầu vào đều là bội số của 64
-    for name, before, after in [
-        ("Copyright", copyright_before, copyright_after),
-        ("pHash", phash_before, phash_after),
-        ("Metadata", metadata_before, metadata_after)
-    ]:
-        if len(before) % 64 != 0 or len(after) % 64 != 0:
-            raise ValueError(f"{name} trước và sau phải là bội số của 64 bit.")
     
     # Tính toán lỗi bit cho từng phần
     def bit_diff_stats(before, after):
@@ -601,8 +593,10 @@ def write_extracted_messages(
         return length, positions, error_rate
     
     cp_len,   cp_pos,   cp_err   = bit_diff_stats(copyright_before, copyright_after)
-    ph_len,   ph_pos,   ph_err   = bit_diff_stats(phash_before, phash_after)
-    md_len,   md_pos,   md_err   = bit_diff_stats(metadata_before, metadata_after)
+    # ph_len,   ph_pos,   ph_err   = bit_diff_stats(phash_before, phash_after)
+    # md_len,   md_pos,   md_err   = bit_diff_stats(metadata_before, metadata_after)
+    ph_len,   ph_pos,   ph_err   = 0,0,0
+    md_len,   md_pos,   md_err   = 0,0,0
     
     # Tính toán lỗi bit cho toàn bộ dãy (copyright + metadata)
     combined_before = copyright_before + phash_before + metadata_before
@@ -610,52 +604,98 @@ def write_extracted_messages(
     gen_len, gen_pos, gen_err = bit_diff_stats(combined_before, combined_after)
 
     # Helper: format bit string in blocks of 64 separated by " | "
-    def format_in_blocks(bit_str, block_size=64):
+    def format_in_blocks(bit_str, block_size=30):
         return " | ".join(
             bit_str[i:i+block_size] for i in range(0, len(bit_str), block_size)
         )
     
     copyright_before_fmt = format_in_blocks(copyright_before)
-    copyright_after_fmt  = format_in_blocks(copyright_after)
-    phash_before_fmt    = format_in_blocks(phash_before)
-    phash_after_fmt     = format_in_blocks(phash_after)
-    metadata_before_fmt = format_in_blocks(metadata_before)
-    metadata_after_fmt  = format_in_blocks(metadata_after)
-    general_before_fmt  = format_in_blocks(combined_before)
-    general_after_fmt   = format_in_blocks(combined_after)
-    
+    copyright_after_fmt = format_in_blocks(copyright_after)
+    phash_before_fmt = format_in_blocks(phash_before) if ph_len > 0 else ""
+    phash_after_fmt = format_in_blocks(phash_after) if ph_len > 0 else ""
+    metadata_before_fmt = format_in_blocks(metadata_before) if md_len > 0 else ""
+    metadata_after_fmt = format_in_blocks(metadata_after) if md_len > 0 else ""
+    general_before_fmt = format_in_blocks(combined_before) if gen_len > 0 else ""
+    general_after_fmt = format_in_blocks(combined_after) if gen_len > 0 else ""
+
     # Ghi thông tin ra file
     with open(out_file_path, 'a') as f:
         f.write(f"Image_ID: {image_id_str}\n")
-        
+
         # Copyright block
         f.write(f"Copyright Length: {cp_len}\n")
         f.write(f"    Copyright Before: {copyright_before_fmt}\n")
         f.write(f"    Copyright After: {copyright_after_fmt}\n")
         f.write(f"    Copyright Bit Error: {cp_err}\n")
         f.write(f"    Copyright Wrong Position: {cp_pos}\n")
-        
-        # pHash block
-        f.write(f"pHash Length: {ph_len}\n")
-        f.write(f"    pHash Before: {phash_before_fmt}\n")
-        f.write(f"    pHash After: {phash_after_fmt}\n")
-        f.write(f"    pHash Bit Error: {ph_err}\n")
-        f.write(f"    pHash Wrong Position: {ph_pos}\n")
-        
-        # Metadata block
-        f.write(f"Metadata Length: {md_len}\n")
-        f.write(f"    Metadata Before: {metadata_before_fmt}\n")
-        f.write(f"    Metadata After: {metadata_after_fmt}\n")
-        f.write(f"    Metadata Bit Error: {md_err}\n")
-        f.write(f"    Metadata Wrong Position: {md_pos}\n")
-        
-        # General block
-        f.write(f"General Bit Length: {gen_len}\n")
-        f.write(f"    General Bit Before: {general_before_fmt}\n")
-        f.write(f"    General Bit After: {general_after_fmt}\n")
-        f.write(f"    General Bit Error: {gen_err}\n")
-        f.write(f"General Wrong Position: {gen_pos}\n")
+
+        # pHash block (only if length > 0)
+        if ph_len > 0:
+            f.write(f"pHash Length: {ph_len}\n")
+            f.write(f"    pHash Before: {phash_before_fmt}\n")
+            f.write(f"    pHash After: {phash_after_fmt}\n")
+            f.write(f"    pHash Bit Error: {ph_err}\n")
+            f.write(f"    pHash Wrong Position: {ph_pos}\n")
+
+        # Metadata block (only if length > 0)
+        if md_len > 0:
+            f.write(f"Metadata Length: {md_len}\n")
+            f.write(f"    Metadata Before: {metadata_before_fmt}\n")
+            f.write(f"    Metadata After: {metadata_after_fmt}\n")
+            f.write(f"    Metadata Bit Error: {md_err}\n")
+            f.write(f"    Metadata Wrong Position: {md_pos}\n")
+
+        # General block (only if something beyond copyright exists)
+        if gen_len > cp_len:
+            f.write(f"General Bit Length: {gen_len}\n")
+            f.write(f"    General Bit Before: {general_before_fmt}\n")
+            f.write(f"    General Bit After: {general_after_fmt}\n")
+            f.write(f"    General Bit Error: {gen_err}\n")
+            f.write(f"General Wrong Position: {gen_pos}\n")
+
         f.write("---------------------\n")
-    
+
     return gen_err
 # ----- VN End -----
+
+
+
+
+
+from typing import List, Tuple
+
+def compute_bit_error_and_accuracy(
+    before: List[str],
+    after: List[str]
+) -> Tuple[float, float]:
+    """
+    Compute the bit‐error rate and bit‐accuracy rate (as fractions, without '%' signs)
+    between two lists of bit‐strings.
+
+    Args:
+        before: List of bit‐strings (each of equal length) representing the original bits.
+        after:  List of bit‐strings (each of equal length) representing the recovered bits.
+
+    Returns:
+        A tuple (error_rate, accuracy_rate), where
+        - error_rate    is the fraction of bits that differ (in [0.0, 1.0]),
+        - accuracy_rate is the fraction of bits that match (in [0.0, 1.0]).
+    """
+    if len(before) != len(after):
+        raise ValueError("Lists must have the same number of bit‐strings")
+    if any(len(b) != len(a) for b, a in zip(before, after)):
+        raise ValueError("All bit‐strings must have the same length")
+
+    num_strings     = len(before)
+    bits_per_string = len(before[0])
+    total_bits      = num_strings * bits_per_string
+
+    # count mismatches
+    error_count = 0
+    for b_str, a_str in zip(before, after):
+        error_count += sum(1 for b_bit, a_bit in zip(b_str, a_str) if b_bit != a_bit)
+
+    error_rate    = error_count / total_bits
+    accuracy_rate = 1.0 - error_rate
+
+    return error_rate, accuracy_rate

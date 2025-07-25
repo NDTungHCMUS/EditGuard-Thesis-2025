@@ -17,10 +17,30 @@ import numpy as np
 
 # ----- VN Start -----
 ## Explaination: Import library
-from utils.random_walk import random_walk_unique
-from utils.LDPC import generate_ldpc_matrices
-from utils.my_util import load_copyright_phash_metadata_from_files, tensor_to_binary_string, compute_parity_from_list_copyright_phash_metadata, compute_message, get_copyright_phash_metadata_from_list_with_correction, get_copyright_phash_metadata_from_list_without_correction, split_all_images, combine_torch_tensors_4d, split_torch_tensors_4d, write_extracted_messages
+# from utils.random_walk import random_walk_unique
+# from utils.LDPC import generate_ldpc_matrices
+from utils.my_util import load_copyright_phash_metadata_from_files, compute_bit_error_and_accuracy, tensor_to_binary_string, split_all_images, combine_torch_tensors_4d, split_torch_tensors_4d, write_extracted_messages
 # ------ VN End ------
+
+# ----- VN START -----
+import sys
+import logging
+
+# Open the file with UTF-8 encoding to support emojis and Unicode
+logfile = open("test_console.log", "w", encoding="utf-8")
+
+sys.stdout = logfile
+sys.stderr = logfile
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    stream=logfile
+)
+# ----- VN END -----
+
+
+
 
 def init_dist(backend='nccl', **kwargs):
     ''' initialization for distributed training'''
@@ -96,12 +116,12 @@ def main():
 
     # ----- VN Start -----
     ## Explaination: Split images into n^2 sub-images (comment if already done)
-    if (opt['datasets']['TD']['need_to_split']):
-        split_all_images(input_folder = opt['datasets']['TD']['data_path'],
-                        output_folder = opt['datasets']['TD']['split_path_ori'],
-                        num_images = opt['datasets']['TD']['num_images'],
-                        num_child_on_width_size = opt['datasets']['TD']['num_child_on_width_size'],
-                        num_child_on_height_size = opt['datasets']['TD']['num_child_on_height_size'])
+    # if (opt['datasets']['TD']['need_to_split']):
+    #     split_all_images(input_folder = opt['datasets']['TD']['data_path'],
+    #                     output_folder = opt['datasets']['TD']['split_path_ori'],
+    #                     num_images = opt['datasets']['TD']['num_images'],
+    #                     num_child_on_width_size = opt['datasets']['TD']['num_child_on_width_size'],
+    #                     num_child_on_height_size = opt['datasets']['TD']['num_child_on_height_size'])
     # ----- VN End -----
 
     # Create train and val dataloader
@@ -131,7 +151,7 @@ def main():
 
     # ----- VN Start -----
     ## Explaination: Create copyright, metadata and corresponding parity if having correction code
-    type_correction_code = opt['type_correction_code']
+    type_correction_code = 0
     if (type_correction_code == 1):
         algo_type = "REED-SOLOMON 16"
     elif (type_correction_code == 2):
@@ -145,17 +165,17 @@ def main():
     else:
         algo_type = "NO-CORRECTION"
 
-    if (algo_type == "NO-CORRECTION"):
-        print("NO-CORRECTION CODE, PLEASE CHECK YOUR CODE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        exit(0)
+    # if (algo_type == "NO-CORRECTION"):
+    #     print("NO-CORRECTION CODE, PLEASE CHECK YOUR CODE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+    #     exit(0)
 
-    P_GLOBAL, H_GLOBAL = generate_ldpc_matrices(k=64, m=64, row_weight=3)
-    number_of_64bits_blocks_copyright = opt['copyright_length'] // 64
-    number_of_64bits_blocks_phash = opt['phash_length'] // 64
-    number_of_64bits_blocks_metadata = opt['metadata_length'] // 64
-    number_of_64bits_blocks_input = opt['metadata_length'] // 64 + opt['copyright_length'] // 64 + opt['phash_length'] // 64
+    # P_GLOBAL, H_GLOBAL = generate_ldpc_matrices(k=64, m=64, row_weight=3)
+    number_of_64bits_blocks_copyright = opt['copyright_length'] // 30
+    number_of_64bits_blocks_phash = opt['phash_length'] // 30
+    number_of_64bits_blocks_metadata = opt['metadata_length'] // 30
+    number_of_64bits_blocks_input = opt['metadata_length'] // 30 + opt['copyright_length'] // 30 + opt['phash_length'] // 30
     list_dict_copyright_phash_metadata = load_copyright_phash_metadata_from_files(opt['datasets']['TD']['copyright_path'], number_of_64bits_blocks_copyright, number_of_64bits_blocks_phash, number_of_64bits_blocks_metadata)
-    list_dict_parity_copyright_phash_metadata = compute_parity_from_list_copyright_phash_metadata(list_dict_copyright_phash_metadata, number_of_64bits_blocks_copyright, number_of_64bits_blocks_phash, number_of_64bits_blocks_metadata, type_correction_code = type_correction_code, P = P_GLOBAL, H = H_GLOBAL)
+    # list_dict_parity_copyright_phash_metadata = compute_parity_from_list_copyright_phash_metadata(list_dict_copyright_phash_metadata, number_of_64bits_blocks_copyright, number_of_64bits_blocks_phash, number_of_64bits_blocks_metadata, type_correction_code = type_correction_code, P = P_GLOBAL, H = H_GLOBAL)
     # ----- VN End -----
     
     # ----- VN Start -----
@@ -167,11 +187,11 @@ def main():
     num_child_on_width_size = opt['datasets']['TD']['num_child_on_width_size']
     num_child_on_height_size = opt['datasets']['TD']['num_child_on_height_size']
     bit_error_list_without_correction_code = []
-    bit_error_list_with_correction_code = []
+    bit_accuracy_list_without_correction_code = []
 
 
     # Create Random Walk
-    random_walk_sequence = random_walk_unique(number_of_64bits_blocks_input, num_child_images, opt['seed_number'])
+    # random_walk_sequence = random_walk_unique(number_of_64bits_blocks_input, num_child_images, opt['seed_number'])
 
     ## Explaination: Main flow
     for parent_image_id, val_data in enumerate(val_loader):  
@@ -184,7 +204,7 @@ def main():
                 'GT': val_data['GT'][i].unsqueeze(0)
             }
             model.feed_data(child_data)
-            message = compute_message(i, list_dict_copyright_phash_metadata[parent_image_id], list_dict_parity_copyright_phash_metadata[parent_image_id], random_walk_sequence, number_of_64bits_blocks_copyright, number_of_64bits_blocks_phash, number_of_64bits_blocks_metadata)
+            message = list_dict_copyright_phash_metadata[0]["copyright"][i]
             if message != -1:
                 I_ori, I_container, messageTensor = model.embed(message)
                 list_messageTensor.append(messageTensor)
@@ -237,6 +257,8 @@ def main():
             recmessage, message = model.extract(list_messageTensor[i], y_forw = list_rec[i], y = list_rec_quantize[i])
             list_recmessage.append(recmessage)
             list_message.append(message)
+            print(f"Step 5, at i = {i}, message: {message}")
+            print(f"Step 5, at i = {i}, recmessage: {recmessage}")
 
         # Step 5.1: Convert list_message, list_recmessage from tensor to binary string
         for i in range(0, len(list_message)):
@@ -244,22 +266,26 @@ def main():
           list_recmessage[i] = tensor_to_binary_string(list_recmessage[i])
         
         # Step 5.2: Get copyright (before, after), phash (before, after), metadata (before, after) from list_message, list_recmessage
-        copyright_before, copyright_after, phash_before, phash_after, metadata_before, metadata_after = get_copyright_phash_metadata_from_list_without_correction(list_message, list_recmessage, random_walk_sequence, number_of_64bits_blocks_copyright, number_of_64bits_blocks_phash, number_of_64bits_blocks_metadata)
-        bit_error = write_extracted_messages(parent_image_id, copyright_before, copyright_after, phash_before, phash_after, metadata_before, metadata_after, opt['datasets']['TD']['copyright_output_without_correction'])
+        copyright_before, copyright_after, phash_before, phash_after, metadata_before, metadata_after = list_message, list_recmessage, [], [], [], []
+        bit_error, bit_accuracy = compute_bit_error_and_accuracy(copyright_before, copyright_after)
         bit_error_list_without_correction_code.append(bit_error)
-
+        bit_accuracy_list_without_correction_code.append(bit_accuracy)
+        print(f"BIt accuracy for image {parent_image_id + 1}: {bit_accuracy}")
+        
         # Step 6: Try to fix base on Reed-Solomons        
-        copyright_before, copyright_after, phash_before, phash_after, metadata_before, metadata_after, cnt_cannot_solve = get_copyright_phash_metadata_from_list_with_correction(list_message, list_recmessage, random_walk_sequence, number_of_64bits_blocks_copyright, number_of_64bits_blocks_phash, number_of_64bits_blocks_metadata, type_correction_code = type_correction_code, H = H_GLOBAL)
-        bit_error = write_extracted_messages(parent_image_id, copyright_before, copyright_after, phash_before, phash_after, metadata_before, metadata_after, opt['datasets']['TD']['copyright_output_with_correction'])
-        bit_error_list_with_correction_code.append(bit_error)
-        cnt_cannot_solve_all += cnt_cannot_solve
+        # copyright_before, copyright_after, phash_before, phash_after, metadata_before, metadata_after, cnt_cannot_solve = get_copyright_phash_metadata_from_list_with_correction(list_message, list_recmessage, random_walk_sequence, number_of_64bits_blocks_copyright, number_of_64bits_blocks_phash, number_of_64bits_blocks_metadata, type_correction_code = type_correction_code, H = H_GLOBAL)
+        # bit_error = write_extracted_messages(parent_image_id, copyright_before, copyright_after, phash_before, phash_after, metadata_before, metadata_after, opt['datasets']['TD']['copyright_output_with_correction'])
+        # bit_error_list_with_correction_code.append(bit_error)
+        # cnt_cannot_solve_all += cnt_cannot_solve
 
     avg_bit_error_without_correction = sum(bit_error_list_without_correction_code) / len(bit_error_list_without_correction_code)
-    avg_bit_error_with_correction = sum(bit_error_list_with_correction_code) / len(bit_error_list_with_correction_code)
+    avg_bit_accuracy_without_correction = sum(bit_accuracy_list_without_correction_code) / len(bit_accuracy_list_without_correction_code)
+    # avg_bit_error_with_correction = sum(bit_error_list_with_correction_code) / len(bit_error_list_with_correction_code)
 
     # PRINT RESULT
     # print(f"Cannot Solve {cnt_cannot_solve_all} pairs among {num_images * num_child_images // 2} pairs")
-    print(f"FINAL RESULT:\n BIT_ERR WITHOUT CORRECTION IS: {avg_bit_error_without_correction} \n BIT_ERR WITH {algo_type} CORRECTION METHOD IS: {avg_bit_error_with_correction}")
+    print(f"FINAL RESULT:\n BIT_ERR WITHOUT CORRECTION IS: {avg_bit_error_without_correction}")
+    print(f" BIT_ACC WITHOUT CORRECTION IS: {avg_bit_accuracy_without_correction}")
 
     # ----- ORIGINAL -----
     # img_dir = os.path.join('results',opt['name'])

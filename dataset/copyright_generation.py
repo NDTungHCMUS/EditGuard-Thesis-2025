@@ -16,7 +16,7 @@ def generate_bit_blocks(output_path, num_images=10, bits_per_image=2):
             image_id = f"{i:04d}"  # Format as 4-digit string
             f.write(f"{image_id}\n")
             for _ in range(bits_per_image):
-                bits = ''.join(random.choice('01') for _ in range(64))
+                bits = ''.join(random.choice('01') for _ in range(30))
                 f.write(f"{bits}\n")
     print(f"Generated file with {num_images} image blocks at {output_path}")
 
@@ -38,11 +38,11 @@ if __name__ == "__main__":
     # 5) Generate bit-blocks there
     generate_bit_blocks(
         output_path  = str(out_path),
-        num_images   = 20,
+        num_images   = 100,
         bits_per_image = (
-            opt.copyright_length//64
-          + opt.phash_length//64
-          + opt.metadata_length//64
+            opt.copyright_length//30
+          + opt.phash_length//30
+          + opt.metadata_length//30
         )
     )
 

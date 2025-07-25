@@ -10,12 +10,12 @@ class DW_Encoder(nn.Module):
         self.down2 = Down(32, 64, blocks=blocks)
         self.down3 = Down(64, 128, blocks=blocks)
 
-        self.down4 = Down(128, 256, blocks=blocks)
+        # self.down4 = Down(128, 256, blocks=blocks)
 
-        self.up3 = UP(256, 128)
-        self.linear3 = nn.Linear(message_length, message_length * message_length)
-        self.Conv_message3 = ConvBlock(1, channels, blocks=blocks)
-        self.att3 = ResBlock(128 * 2 + channels, 128, blocks=blocks, attention=attention)
+        # self.up3 = UP(256, 128)
+        # self.linear3 = nn.Linear(message_length, message_length * message_length)
+        # self.Conv_message3 = ConvBlock(1, channels, blocks=blocks)
+        # self.att3 = ResBlock(128 * 2 + channels, 128, blocks=blocks, attention=attention)
 
         self.up2 = UP(128, 64)
         self.linear2 = nn.Linear(message_length, message_length * message_length)
@@ -48,18 +48,18 @@ class DW_Encoder(nn.Module):
         d2 = self.down2(d1)
         d3 = self.down3(d2)
 
-        d4 = self.down4(d3)
+        # d4 = self.down4(d3)
 
-        u3 = self.up3(d4)
-        expanded_message = self.linear3(watermark)
-        expanded_message = expanded_message.view(-1, 1, self.message_length, self.message_length)
-        expanded_message = F.interpolate(expanded_message, size=(d3.shape[2], d3.shape[3]),
-                                                           mode='nearest')
-        expanded_message = self.Conv_message3(expanded_message)
-        u3 = torch.cat((d3, u3, expanded_message), dim=1)
-        u3 = self.att3(u3)
+        # u3 = self.up3(d4)
+        # expanded_message = self.linear3(watermark)
+        # expanded_message = expanded_message.view(-1, 1, self.message_length, self.message_length)
+        # expanded_message = F.interpolate(expanded_message, size=(d3.shape[2], d3.shape[3]),
+        #                                                    mode='nearest')
+        # expanded_message = self.Conv_message3(expanded_message)
+        # u3 = torch.cat((d3, u3, expanded_message), dim=1)
+        # u3 = self.att3(u3)
 
-        u2 = self.up2(u3)
+        u2 = self.up2(d3)
         expanded_message = self.linear2(watermark)
         expanded_message = expanded_message.view(-1, 1, self.message_length, self.message_length)
         expanded_message = F.interpolate(expanded_message, size=(d2.shape[2], d2.shape[3]),
