@@ -189,13 +189,14 @@ def main():
     bit_error_list_without_correction_code = []
     bit_accuracy_list_without_correction_code = []
 
-
+    psnr_avg = 0.0
     # Create Random Walk
     # random_walk_sequence = random_walk_unique(number_of_64bits_blocks_input, num_child_images, opt['seed_number'])
 
     ## Explaination: Main flow
     for parent_image_id, val_data in enumerate(val_loader):  
         # Step 1: Embed data into images
+        list_ori = []
         list_container = []
         list_messageTensor = []
         for i in range(0, num_child_images):
@@ -209,24 +210,29 @@ def main():
                 I_ori, I_container, messageTensor = model.embed(message)
                 list_messageTensor.append(messageTensor)
                 list_container.append(I_container)
+                list_ori.append(I_ori)
             else:
                 I_ori, I_container, messageTensor = model.embed(embedMessage = False)
                 list_messageTensor.append(messageTensor)
                 list_container.append(I_ori)
+                list_ori.append(I_ori)
 
         # Step 1.1: Save all child images to folder
-        for i in range(len(list_container)):
-            child_container_img = util.tensor2img(list_container[i].detach()[0].float().cpu())
-            folder_name = str(parent_image_id + 1).zfill(4)
-            output_folder = os.path.join(opt['datasets']['TD']['split_path_con'], folder_name)
-            save_img_path = os.path.join(output_folder,f'{str(i).zfill(4)}.png')
-            util.save_img(child_container_img, save_img_path)
+        # for i in range(len(list_container)):
+        #     child_container_img = util.tensor2img(list_container[i].detach()[0].float().cpu())
+        #     folder_name = str(parent_image_id + 1).zfill(4)
+        #     output_folder = os.path.join(opt['datasets']['TD']['split_path_con'], folder_name)
+        #     save_img_path = os.path.join(output_folder,f'{str(i).zfill(4)}.png')
+        #     util.save_img(child_container_img, save_img_path)
 
         # Step 2: Combine all child images into one (4 dimensions)
         parent_container = combine_torch_tensors_4d(list_container, num_child_on_width_size, num_child_on_height_size)
+        parent_ori = combine_torch_tensors_4d(list_ori, num_child_on_width_size, num_child_on_height_size)
+
 
         # Step 2.1: Save parent_container to folder
         parent_container_img = util.tensor2img(parent_container.detach()[0].float().cpu())
+        parent_ori_img = util.tensor2img(parent_ori.detach()[0].float().cpu())
         save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id + 1).zfill(4)}.png')
         util.save_img(parent_container_img, save_img_path)
 
@@ -272,12 +278,17 @@ def main():
         bit_accuracy_list_without_correction_code.append(bit_accuracy)
         print(f"BIt accuracy for image {parent_image_id + 1}: {bit_accuracy}")
         
+        # Calculate PSNR
+        pnsr_cur = cal_pnsr(parent_container_img, parent_ori_img)
+        psnr_avg += pnsr_cur
+        print(f"PSNR for image {parent_image_id + 1}: {pnsr_cur}")
         # Step 6: Try to fix base on Reed-Solomons        
         # copyright_before, copyright_after, phash_before, phash_after, metadata_before, metadata_after, cnt_cannot_solve = get_copyright_phash_metadata_from_list_with_correction(list_message, list_recmessage, random_walk_sequence, number_of_64bits_blocks_copyright, number_of_64bits_blocks_phash, number_of_64bits_blocks_metadata, type_correction_code = type_correction_code, H = H_GLOBAL)
         # bit_error = write_extracted_messages(parent_image_id, copyright_before, copyright_after, phash_before, phash_after, metadata_before, metadata_after, opt['datasets']['TD']['copyright_output_with_correction'])
         # bit_error_list_with_correction_code.append(bit_error)
         # cnt_cannot_solve_all += cnt_cannot_solve
 
+    psnr_avg /= num_images
     avg_bit_error_without_correction = sum(bit_error_list_without_correction_code) / len(bit_error_list_without_correction_code)
     avg_bit_accuracy_without_correction = sum(bit_accuracy_list_without_correction_code) / len(bit_accuracy_list_without_correction_code)
     # avg_bit_error_with_correction = sum(bit_error_list_with_correction_code) / len(bit_error_list_with_correction_code)
@@ -286,6 +297,7 @@ def main():
     # print(f"Cannot Solve {cnt_cannot_solve_all} pairs among {num_images * num_child_images // 2} pairs")
     print(f"FINAL RESULT:\n BIT_ERR WITHOUT CORRECTION IS: {avg_bit_error_without_correction}")
     print(f" BIT_ACC WITHOUT CORRECTION IS: {avg_bit_accuracy_without_correction}")
+    print(f" PSNR AVG IS: {psnr_avg}")
 
     # ----- ORIGINAL -----
     # img_dir = os.path.join('results',opt['name'])

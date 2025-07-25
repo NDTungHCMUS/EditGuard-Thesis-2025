@@ -804,7 +804,7 @@ class Model_VSN(BaseModel):
 
                 for j in range(b):
                     i = image_id + 1
-                    masksrc = "../dataset/valAGE-Set-Mask(4096,3072)/"
+                    masksrc = "../dataset/valAGE-Set-Mask(512,512)/"
                     mask_image = Image.open(masksrc + str(i).zfill(4) + ".png").convert("L")
 
                     # ----- VN Start -----
