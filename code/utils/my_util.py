@@ -9,13 +9,116 @@ from .reed_solomons_16 import compute_parity_16, recover_original_16
 from .reed_solomons_8 import compute_parity_8, recover_original_8
 from .hamming_code_7_4 import compute_parity_hamming_74, recover_original_hamming_74
 from .hamming_code_12_8 import compute_parity_hamming_12_8, recover_original_hamming_12_8
+from .hamming_code_7_4_new import encode_hamming74, decode_hamming74, recover_30_from_codeword60, parity_30_from_30
 from .LDPC import ldpc_encode, ldpc_decode_bp
 from .util import save_img, tensor2img, decoded_message_error_rate
+import hashlib
 
-def load_copyright_phash_metadata_from_files(
+def hash_30bit_to_256bit(bitstr_30: str) -> str:
+    """
+    Nhận chuỗi bit dài 30 ('0'/'1'), trả về chuỗi bit dài 256 sau SHA-256.
+    """
+    if len(bitstr_30) != 30 or any(c not in '01' for c in bitstr_30):
+        raise ValueError("Đầu vào phải là chuỗi 30 bit gồm '0' và '1'.")
+
+    # Chuyển chuỗi bit sang bytes
+    # 30 bit => cần 4 byte (32 bit), pad 2 bit '0' cho đủ byte
+    padded_bitstr = bitstr_30 + '0' * (8 - (len(bitstr_30) % 8))
+    b = int(padded_bitstr, 2).to_bytes(len(padded_bitstr) // 8, byteorder='big')
+
+    # Hash SHA-256
+    digest = hashlib.sha256(b).digest()  # 32 byte = 256 bit
+
+    # Trả về dạng chuỗi bit
+    return ''.join(f'{byte:08b}' for byte in digest)
+
+def split_bits_30_with_padding(bitstr: str) -> tuple[list[str], int]:
+    """
+    Chia chuỗi bit (dài bất kỳ) thành các đoạn 30 bit.
+    Đoạn cuối nếu < 30 thì pad thêm '0', trả về luôn số lượng bit pad.
+    
+    Trả về:
+      - chunks: List[str] (mỗi phần tử 30 bit)
+      - padding_length: int (số bit '0' đã pad)
+    """
+    if any(c not in '01' for c in bitstr):
+        raise ValueError("Chuỗi đầu vào chỉ được chứa '0' và '1'.")
+
+    chunks = [bitstr[i:i+30] for i in range(0, len(bitstr), 30)]
+    padding_len = 0
+
+    if chunks:
+        last_len = len(chunks[-1])
+        if last_len < 30:
+            padding_len = 30 - last_len
+            chunks[-1] = chunks[-1] + '0' * padding_len
+
+    return chunks, padding_len
+
+
+def load_copyright_metadata(
+    list_copyright: list,
+    list_metadata: list
+) -> list[dict[list[str], list[str]]]:
+    results = []
+    for c, m in zip(list_copyright, list_metadata):
+        # c = hash_30bit_to_256bit(c)
+        c_list, c_padding = split_bits_30_with_padding(c)
+        m_list, m_padding = split_bits_30_with_padding(m)
+        results.append({
+            "copyright": c_list,
+            "metadata": m_list,
+            "copyright_padding": c_padding,
+            "metadata_padding": m_padding,
+            "copyright_blocks": len(c_list),
+            "metadata_blocks": len(m_list)
+        })
+
+    return results
+
+def calculate(
+    list_message,
+    list_recmessage,
+    copyright_blocks,
+    metadata_blocks,
+    copyright_padding,
+    metadata_padding,
+    type_correction_code
+):
+    # Tách các block
+    copyright_before = list_message[0:copyright_blocks]
+    copyright_after  = list_recmessage[0:copyright_blocks]
+    metadata_before  = list_message[copyright_blocks:copyright_blocks + metadata_blocks]
+    metadata_after   = list_recmessage[copyright_blocks:copyright_blocks + metadata_blocks]
+    copyright_after_ECC = []
+    metadata_after_ECC = []
+
+    if (type_correction_code != 0):
+        copyright_parity_after = list_recmessage[copyright_blocks + metadata_blocks:2 * copyright_blocks + metadata_blocks]
+        metadata_parity_after = list_recmessage[2 * copyright_blocks + metadata_blocks:2 * copyright_blocks + 2 * metadata_blocks]
+        for i in range(len(copyright_after)):
+            copyright_after_ECC.append(recover_30_from_codeword60(copyright_after[i] + copyright_parity_after[i]))
+        for i in range(len(metadata_after)):
+            metadata_after_ECC.append(recover_30_from_codeword60(metadata_after[i] + metadata_parity_after[i]))
+    # Bỏ padding ở phần tử cuối
+    if copyright_before and copyright_padding > 0:
+        copyright_before[-1] = copyright_before[-1][:-copyright_padding]
+    if copyright_after and copyright_padding > 0:
+        copyright_after[-1] = copyright_after[-1][:-copyright_padding]
+    if copyright_after_ECC and copyright_padding > 0:
+        copyright_after_ECC[-1] = copyright_after_ECC[-1][:-copyright_padding]
+    if metadata_before and metadata_padding > 0:
+        metadata_before[-1] = metadata_before[-1][:-metadata_padding]
+    if metadata_after and metadata_padding > 0:
+        metadata_after[-1] = metadata_after[-1][:-metadata_padding]
+    if metadata_after_ECC and metadata_padding > 0:
+        metadata_after_ECC[-1] = metadata_after_ECC[-1][:-metadata_padding]
+
+    return copyright_before, copyright_after, copyright_after_ECC, metadata_before, metadata_after, metadata_after_ECC
+
+def load_copyright_metadata_from_files(
     file_path: str,
     number_of_64bits_blocks_copyright: int,
-    number_of_64bits_blocks_phash: int,
     number_of_64bits_blocks_metadata: int
 ) -> list[dict]:
     """
@@ -24,15 +127,12 @@ def load_copyright_phash_metadata_from_files(
       <copyright block 1>
       ...
       <copyright block N>
-      <phash block 1>
-      ...
-      <phash block M>
       <metadata block 1>
       ...
       <metadata block K>
       0002
       ...
-    Trả về list các dict với keys: "copyright", "phash", "metadata".
+    Trả về list các dict với keys: "copyright", "metadata".
     """
     results = []
     # Đọc vào và loại bỏ newline, giữ nguyên thứ tự
@@ -42,7 +142,6 @@ def load_copyright_phash_metadata_from_files(
     i = 0
     total_blocks = (
         number_of_64bits_blocks_copyright
-        + number_of_64bits_blocks_phash
         + number_of_64bits_blocks_metadata
     )
 
@@ -61,22 +160,20 @@ def load_copyright_phash_metadata_from_files(
         copyright_list = lines[i : i + number_of_64bits_blocks_copyright]
         i += number_of_64bits_blocks_copyright
 
-        phash_list = lines[i : i + number_of_64bits_blocks_phash]
-        i += number_of_64bits_blocks_phash
-
         metadata_list = lines[i : i + number_of_64bits_blocks_metadata]
         i += number_of_64bits_blocks_metadata
 
         results.append({
             "copyright": copyright_list,
-            "phash":    phash_list,
             "metadata": metadata_list
         })
 
     return results
 
 
-def compute_parity_from_list_copyright_phash_metadata(
+
+
+def compute_parity_from_list_copyright_metadata(
     list_copyright_metadata,
     number_of_64bits_blocks_copyright,
     number_of_64bits_blocks_phash,
@@ -114,11 +211,6 @@ def compute_parity_from_list_copyright_phash_metadata(
                 f"Item {idx}: expected {number_of_64bits_blocks_copyright} copyright blocks, "
                 f"got {len(item.get('copyright', []))}"
             )
-        if len(item.get("phash", [])) != number_of_64bits_blocks_phash:
-            raise ValueError(
-                f"Item {idx}: expected {number_of_64bits_blocks_phash} phash blocks, "
-                f"got {len(item.get('phash', []))}"
-            )
         if len(item.get("metadata", [])) != number_of_64bits_blocks_metadata:
             raise ValueError(
                 f"Item {idx}: expected {number_of_64bits_blocks_metadata} metadata blocks, "
@@ -129,16 +221,12 @@ def compute_parity_from_list_copyright_phash_metadata(
         parity_copyright = [
             _encode(block) for block in item["copyright"]
         ]
-        parity_phash    = [
-            _encode(block) for block in item["phash"]
-        ]
         parity_metadata = [
             _encode(block) for block in item["metadata"]
         ]
 
         results.append({
             "copyright": parity_copyright,
-            "phash":    parity_phash,
             "metadata": parity_metadata
         })
 
@@ -665,35 +753,34 @@ def write_extracted_messages(
 from typing import List, Tuple
 
 def compute_bit_error_and_accuracy(
-    before: List[str],
-    after: List[str]
+    copyright_before: List[str],
+    copyright_after:  List[str],
+    metadata_before:  List[str],
+    metadata_after:   List[str]
 ) -> Tuple[float, float]:
     """
-    Compute the bit‐error rate and bit‐accuracy rate (as fractions, without '%' signs)
-    between two lists of bit‐strings.
-
-    Args:
-        before: List of bit‐strings (each of equal length) representing the original bits.
-        after:  List of bit‐strings (each of equal length) representing the recovered bits.
-
-    Returns:
-        A tuple (error_rate, accuracy_rate), where
-        - error_rate    is the fraction of bits that differ (in [0.0, 1.0]),
-        - accuracy_rate is the fraction of bits that match (in [0.0, 1.0]).
+    Tính Bit Error Rate và Accuracy giữa các cặp chuỗi bit
+    (bao gồm cả copyright và metadata).
     """
+    # Gộp lại thành một list để xử lý chung
+    before = copyright_before + metadata_before
+    after  = copyright_after  + metadata_after
+
     if len(before) != len(after):
         raise ValueError("Lists must have the same number of bit‐strings")
     if any(len(b) != len(a) for b, a in zip(before, after)):
-        raise ValueError("All bit‐strings must have the same length")
+        raise ValueError("All bit‐strings must have the same length per pair")
 
     num_strings     = len(before)
     bits_per_string = len(before[0])
     total_bits      = num_strings * bits_per_string
 
-    # count mismatches
-    error_count = 0
-    for b_str, a_str in zip(before, after):
-        error_count += sum(1 for b_bit, a_bit in zip(b_str, a_str) if b_bit != a_bit)
+    # Đếm số bit khác nhau
+    error_count = sum(
+        1 for b_str, a_str in zip(before, after)
+          for b_bit, a_bit in zip(b_str, a_str)
+          if b_bit != a_bit
+    )
 
     error_rate    = error_count / total_bits
     accuracy_rate = 1.0 - error_rate

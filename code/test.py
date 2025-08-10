@@ -19,7 +19,8 @@ import numpy as np
 ## Explaination: Import library
 # from utils.random_walk import random_walk_unique
 # from utils.LDPC import generate_ldpc_matrices
-from utils.my_util import load_copyright_phash_metadata_from_files, compute_bit_error_and_accuracy, tensor_to_binary_string, split_all_images, combine_torch_tensors_4d, split_torch_tensors_4d, write_extracted_messages
+from utils.my_util import calculate,load_copyright_metadata,load_copyright_metadata_from_files, compute_bit_error_and_accuracy, tensor_to_binary_string, split_all_images, combine_torch_tensors_4d, split_torch_tensors_4d, write_extracted_messages
+from utils.hamming_code_7_4_new import encode_hamming74, decode_hamming74, recover_30_from_codeword60, parity_30_from_30
 # ------ VN End ------
 
 # ----- VN START -----
@@ -151,7 +152,7 @@ def main():
 
     # ----- VN Start -----
     ## Explaination: Create copyright, metadata and corresponding parity if having correction code
-    type_correction_code = 0
+    type_correction_code = opt['type_correction_code']
     if (type_correction_code == 1):
         algo_type = "REED-SOLOMON 16"
     elif (type_correction_code == 2):
@@ -170,24 +171,41 @@ def main():
     #     exit(0)
 
     # P_GLOBAL, H_GLOBAL = generate_ldpc_matrices(k=64, m=64, row_weight=3)
-    number_of_64bits_blocks_copyright = opt['copyright_length'] // 30
-    number_of_64bits_blocks_phash = opt['phash_length'] // 30
-    number_of_64bits_blocks_metadata = opt['metadata_length'] // 30
-    number_of_64bits_blocks_input = opt['metadata_length'] // 30 + opt['copyright_length'] // 30 + opt['phash_length'] // 30
-    list_dict_copyright_phash_metadata = load_copyright_phash_metadata_from_files(opt['datasets']['TD']['copyright_path'], number_of_64bits_blocks_copyright, number_of_64bits_blocks_phash, number_of_64bits_blocks_metadata)
-    # list_dict_parity_copyright_phash_metadata = compute_parity_from_list_copyright_phash_metadata(list_dict_copyright_phash_metadata, number_of_64bits_blocks_copyright, number_of_64bits_blocks_phash, number_of_64bits_blocks_metadata, type_correction_code = type_correction_code, P = P_GLOBAL, H = H_GLOBAL)
+    # number_of_64bits_blocks_copyright = opt['copyright_length'] // 30
+    # number_of_64bits_blocks_metadata = opt['metadata_length'] // 30
+    # number_of_64bits_blocks_input = opt['metadata_length'] // 30 + opt['copyright_length'] // 30
+    num_images = opt['datasets']['TD']['num_images']
+
+    # Tạo list copyright và metadata
+    list_copyright = []
+    list_metadata = []
+    for _ in range(num_images):
+        copyright_bits = ''.join(random.choice('01') for _ in range(30))
+        # metadata_len = random.randint(1, 224)
+        metadata_len = 210
+        metadata_bits = ''.join(random.choice('01') for _ in range(metadata_len))
+        
+        list_copyright.append(copyright_bits)
+        list_metadata.append(metadata_bits)
+    
+    list_dict_copyright_metadata = load_copyright_metadata(list_copyright, list_metadata)
+
+    # list_dict_copyright_metadata = load_copyright_metadata_from_files(opt['datasets']['TD']['copyright_path'], number_of_64bits_blocks_copyright, number_of_64bits_blocks_metadata)
+    # list_dict_parity_copyright_metadata = compute_parity_from_list_copyright_metadata(list_dict_copyright_metadata, number_of_64bits_blocks_copyright, number_of_64bits_blocks_metadata, type_correction_code = type_correction_code, P = P_GLOBAL, H = H_GLOBAL)
     # ----- VN End -----
     
     # ----- VN Start -----
     ## Explaination: Initialize neccessary variables
     ### Note: num_child_images = num_child_on_width_size * num_child_on_height_size
     cnt_cannot_solve_all = 0
-    num_images = opt['datasets']['TD']['num_images']
+    
     num_child_images = opt['datasets']['TD']['num_child_images']
     num_child_on_width_size = opt['datasets']['TD']['num_child_on_width_size']
     num_child_on_height_size = opt['datasets']['TD']['num_child_on_height_size']
     bit_error_list_without_correction_code = []
     bit_accuracy_list_without_correction_code = []
+    bit_error_list_with_correction_code = []
+    bit_accuracy_list_with_correction_code = []
 
     psnr_avg = 0.0
     # Create Random Walk
@@ -199,13 +217,32 @@ def main():
         list_ori = []
         list_container = []
         list_messageTensor = []
+        dict_copyright_metadata = list_dict_copyright_metadata[parent_image_id]
+        print(f"Start embed for image: {parent_image_id + 1}")
+        print(f"Copyright padding, block for image: {parent_image_id + 1}", dict_copyright_metadata["copyright_padding"], dict_copyright_metadata["copyright_blocks"])
+        print(f"Metadata padding, block for image: {parent_image_id + 1}", dict_copyright_metadata["metadata_padding"], dict_copyright_metadata["metadata_blocks"])
         for i in range(0, num_child_images):
             child_data = {
                 'LQ': val_data['LQ'][i].unsqueeze(0),
                 'GT': val_data['GT'][i].unsqueeze(0)
             }
             model.feed_data(child_data)
-            message = list_dict_copyright_phash_metadata[0]["copyright"][i]
+   
+            if (i < dict_copyright_metadata['copyright_blocks']):
+                message = dict_copyright_metadata['copyright'][i]
+            elif (i < dict_copyright_metadata['copyright_blocks'] + dict_copyright_metadata['metadata_blocks']):
+                message = dict_copyright_metadata['metadata'][i - dict_copyright_metadata['copyright_blocks']]
+            else:
+                if (type_correction_code == 0):
+                    message = -1
+                elif (type_correction_code != 0):
+                    if (i < 2 * dict_copyright_metadata['copyright_blocks'] + dict_copyright_metadata['metadata_blocks']):
+                        message = parity_30_from_30(dict_copyright_metadata['copyright'][i - dict_copyright_metadata['copyright_blocks'] - dict_copyright_metadata['metadata_blocks']])
+                    elif (i < 2 * dict_copyright_metadata['copyright_blocks'] + 2 * dict_copyright_metadata['metadata_blocks']):
+                        message = parity_30_from_30(dict_copyright_metadata['metadata'][i - 2 * dict_copyright_metadata['copyright_blocks'] - dict_copyright_metadata['metadata_blocks']])
+                    else :
+                        message = -1
+
             if message != -1:
                 I_ori, I_container, messageTensor = model.embed(message)
                 list_messageTensor.append(messageTensor)
@@ -229,54 +266,66 @@ def main():
         parent_container = combine_torch_tensors_4d(list_container, num_child_on_width_size, num_child_on_height_size)
         parent_ori = combine_torch_tensors_4d(list_ori, num_child_on_width_size, num_child_on_height_size)
 
-
         # Step 2.1: Save parent_container to folder
         parent_container_img = util.tensor2img(parent_container.detach()[0].float().cpu())
         parent_ori_img = util.tensor2img(parent_ori.detach()[0].float().cpu())
-        save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id + 1).zfill(4)}.png')
-        util.save_img(parent_container_img, save_img_path)
+        # save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id + 1).zfill(4)}.png')
+        # util.save_img(parent_container_img, save_img_path)
 
         # Step 3: Diffusion on parent_container
         parent_y_forw, parent_y = model.diffusion(image_id = parent_image_id, y_forw = parent_container)
 
         # Step 3.1: Save parent_y_forw to folder
-        parent_rec_img = util.tensor2img(parent_y_forw)
-        save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id + 1).zfill(4)}_diffusion.png')
-        util.save_img(parent_rec_img, save_img_path)
+        # parent_rec_img = util.tensor2img(parent_y_forw)
+        # save_img_path = os.path.join(opt['datasets']['TD']['merge_path'],f'{str(parent_image_id + 1).zfill(4)}_diffusion.png')
+        # util.save_img(parent_rec_img, save_img_path)
 
         # Step 4: Split parent_rec into child images
         list_rec = split_torch_tensors_4d(parent_y_forw, num_child_on_width_size, num_child_on_height_size)
         list_rec_quantize = split_torch_tensors_4d(parent_y, num_child_on_width_size, num_child_on_height_size)
         
         # Step 4.1: Save all child images to folder
-        for i in range(len(list_rec)):
-            child_rec_img = util.tensor2img(list_rec[i].detach()[0].float().cpu())
-            folder_name = str(parent_image_id + 1).zfill(4)
-            output_folder = os.path.join(opt['datasets']['TD']['split_path_rec'], folder_name)
-            save_img_path = os.path.join(output_folder,f'{str(i).zfill(4)}.png')
-            util.save_img(child_rec_img, save_img_path)
+        # for i in range(len(list_rec)):
+        #     child_rec_img = util.tensor2img(list_rec[i].detach()[0].float().cpu())
+        #     folder_name = str(parent_image_id + 1).zfill(4)
+        #     output_folder = os.path.join(opt['datasets']['TD']['split_path_rec'], folder_name)
+        #     save_img_path = os.path.join(output_folder,f'{str(i).zfill(4)}.png')
+        #     util.save_img(child_rec_img, save_img_path)
             
         list_recmessage = []
         list_message = []
         # Step 5: Extract from all child images
         for i in range(0, num_child_images):
-            recmessage, message = model.extract(list_messageTensor[i], y_forw = list_rec[i], y = list_rec_quantize[i])
-            list_recmessage.append(recmessage)
-            list_message.append(message)
-            print(f"Step 5, at i = {i}, message: {message}")
-            print(f"Step 5, at i = {i}, recmessage: {recmessage}")
+            if (type_correction_code == 0 and i < dict_copyright_metadata['copyright_blocks'] + dict_copyright_metadata['metadata_blocks']):
+                recmessage, message = model.extract(list_messageTensor[i], y_forw = list_rec[i], y = list_rec_quantize[i])
+                list_recmessage.append(recmessage)
+                list_message.append(message)
+                print(f"Step 5, at i = {i}, message: {message}")
+                print(f"Step 5, at i = {i}, recmessage: {recmessage}")
+            elif (type_correction_code != 0 and i < 2 * dict_copyright_metadata['copyright_blocks'] + 2 * dict_copyright_metadata['metadata_blocks']):
+                recmessage, message = model.extract(list_messageTensor[i], y_forw = list_rec[i], y = list_rec_quantize[i])
+                list_recmessage.append(recmessage)
+                list_message.append(message)
+                print(f"Step 5, at i = {i}, message: {message}")
+                print(f"Step 5, at i = {i}, recmessage: {recmessage}")
 
         # Step 5.1: Convert list_message, list_recmessage from tensor to binary string
         for i in range(0, len(list_message)):
           list_message[i] = tensor_to_binary_string(list_message[i])
           list_recmessage[i] = tensor_to_binary_string(list_recmessage[i])
         
-        # Step 5.2: Get copyright (before, after), phash (before, after), metadata (before, after) from list_message, list_recmessage
-        copyright_before, copyright_after, phash_before, phash_after, metadata_before, metadata_after = list_message, list_recmessage, [], [], [], []
-        bit_error, bit_accuracy = compute_bit_error_and_accuracy(copyright_before, copyright_after)
+        # Step 5.2: Get copyright (before, after), metadata (before, after) from list_message, list_recmessage
+        copyright_before, copyright_after, copyright_after_ECC, metadata_before, metadata_after, metadata_after_ECC = calculate(list_message, list_recmessage, copyright_blocks=dict_copyright_metadata["copyright_blocks"], metadata_blocks=dict_copyright_metadata["metadata_blocks"], copyright_padding=dict_copyright_metadata["copyright_padding"], metadata_padding=dict_copyright_metadata["metadata_padding"], type_correction_code=type_correction_code)
+        bit_error, bit_accuracy = compute_bit_error_and_accuracy(copyright_before, copyright_after, metadata_before, metadata_before)
         bit_error_list_without_correction_code.append(bit_error)
         bit_accuracy_list_without_correction_code.append(bit_accuracy)
-        print(f"BIt accuracy for image {parent_image_id + 1}: {bit_accuracy}")
+
+        if (type_correction_code != 0):
+            bit_error_ECC, bit_accuracy_ECC = compute_bit_error_and_accuracy(copyright_before, copyright_after_ECC, metadata_before, metadata_after_ECC)
+            bit_error_list_with_correction_code.append(bit_error_ECC)
+            bit_accuracy_list_with_correction_code.append(bit_accuracy_ECC)
+            print(f"Bit accuracy (with ECC) for image {parent_image_id + 1}: {bit_accuracy_ECC}")
+        print(f"Bit accuracy (without ECC) for image {parent_image_id + 1}: {bit_accuracy}")
         
         # Calculate PSNR
         pnsr_cur = cal_pnsr(parent_container_img, parent_ori_img)
@@ -297,6 +346,11 @@ def main():
     # print(f"Cannot Solve {cnt_cannot_solve_all} pairs among {num_images * num_child_images // 2} pairs")
     print(f"FINAL RESULT:\n BIT_ERR WITHOUT CORRECTION IS: {avg_bit_error_without_correction}")
     print(f" BIT_ACC WITHOUT CORRECTION IS: {avg_bit_accuracy_without_correction}")
+    if (type_correction_code != 0):
+        avg_bit_error_with_correction = sum(bit_error_list_with_correction_code) / len(bit_error_list_with_correction_code)
+        avg_bit_accuracy_with_correction = sum(bit_accuracy_list_with_correction_code) / len(bit_accuracy_list_with_correction_code)
+        print(f" BIT_ERR WITH CORRECTION IS: {avg_bit_error_with_correction}")
+        print(f" BIT_ACC WITH CORRECTION IS: {avg_bit_accuracy_with_correction}")
     print(f" PSNR AVG IS: {psnr_avg}")
 
     # ----- ORIGINAL -----
