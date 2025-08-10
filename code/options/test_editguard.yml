@@ -12,13 +12,18 @@ num_image: 1
 addnoise: False
 noisesigma: 1
 
-addjpeg: True
+addjpeg: False
 jpegfactor: 50
 addpossion: False
 sdinpaint: False
 controlnetinpaint: False
 sdxl: False
 repaint: False
+
+addklvae8: False
+addclip: True
+addresnet: False
+addklvae16: False
 
 hide: True
 hidebit: True
@@ -68,8 +73,8 @@ datasets:
     mode: td
     image_size: 512
     # ----- VN Start -----
-    # num_images: 50
-    num_images: 5
+    num_images: 50
+    # num_images: 5
     num_child_images: 16
     need_to_split: True
     num_child_on_width_size: 4
@@ -78,23 +83,23 @@ datasets:
     height: 128
     
     # copyright_path: ../dataset/copyrights-100-eles.txt
-    # data_path: ../dataset/valAGE-Set-512-50
-    # txt_path:  ../dataset/sep_testlist_50-eles.txt
-    # split_path_ori: ../dataset/valAGE-Set-50-eles-(512,512)px-split-ori
-    # split_path_con: ../dataset/valAGE-Set-50-eles-(512,512)px-split-con
-    # split_path_rec: ../dataset/valAGE-Set-50-eles-(512,512)px-split-rec
-    # merge_path: ../dataset/valAGE-Set-50-eles-(512,512)px-merge
-    # copyright_output_without_correction: ../dataset/copyright-50-eles-(512,512)px-output-without-correction.txt
-    # copyright_output_with_correction: ../dataset/copyright-50-eles-(512,512)px-output-with-correction.txt
+    data_path: ../dataset/valAGE-Set-512-50
+    txt_path:  ../dataset/sep_testlist_50-eles.txt
+    split_path_ori: ../dataset/valAGE-Set-50-eles-(512,512)px-split-ori
+    split_path_con: ../dataset/valAGE-Set-50-eles-(512,512)px-split-con
+    split_path_rec: ../dataset/valAGE-Set-50-eles-(512,512)px-split-rec
+    merge_path: ../dataset/valAGE-Set-50-eles-(512,512)px-merge
+    copyright_output_without_correction: ../dataset/copyright-50-eles-(512,512)px-output-without-correction.txt
+    copyright_output_with_correction: ../dataset/copyright-50-eles-(512,512)px-output-with-correction.txt
 
-    data_path: ../dataset/valAGE-Set-512-5
-    txt_path:  ../dataset/sep_testlist_5-eles.txt
-    split_path_ori: ../dataset/valAGE-Set-5-eles-(512,512)px-split-ori
-    split_path_con: ../dataset/valAGE-Set-5-eles-(512,512)px-split-con
-    split_path_rec: ../dataset/valAGE-Set-5-eles-(512,512)px-split-rec
-    merge_path: ../dataset/valAGE-Set-5-eles-(512,512)px-merge
-    copyright_output_without_correction: ../dataset/copyright-5-eles-(512,512)px-output-without-correction.txt
-    copyright_output_with_correction: ../dataset/copyright-5-eles-(512,512)px-output-with-correction.txt
+    # data_path: ../dataset/valAGE-Set-512-5
+    # txt_path:  ../dataset/sep_testlist_5-eles.txt
+    # split_path_ori: ../dataset/valAGE-Set-5-eles-(512,512)px-split-ori
+    # split_path_con: ../dataset/valAGE-Set-5-eles-(512,512)px-split-con
+    # split_path_rec: ../dataset/valAGE-Set-5-eles-(512,512)px-split-rec
+    # merge_path: ../dataset/valAGE-Set-5-eles-(512,512)px-merge
+    # copyright_output_without_correction: ../dataset/copyright-5-eles-(512,512)px-output-without-correction.txt
+    # copyright_output_with_correction: ../dataset/copyright-5-eles-(512,512)px-output-with-correction.txt
     # ----- ORIGINAL -----
     # num_images: 1
     # data_path: ../dataset/valAGE-Set
