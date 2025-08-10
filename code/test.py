@@ -39,9 +39,58 @@ logging.basicConfig(
     stream=logfile
 )
 # ----- VN END -----
+from typing import List, Dict
 
+def diff_positions(a: str, b: str) -> List[int]:
+    """Trả về các vị trí (0-based) mà a và b khác nhau."""
+    if len(a) != len(b):
+        raise ValueError("Hai chuỗi phải cùng độ dài.")
+    return [i for i, (x, y) in enumerate(zip(a, b)) if x != y]
 
+def diff_summary_list(before_list: List[str], after_list: List[str]) -> List[Dict]:
+    """
+    Tạo summary cho từng cặp (before, after):
+      - diff_count
+      - positions
+      - accuracy = 1 - diff_count/len(bit_string)
+    """
+    if len(before_list) != len(after_list):
+        raise ValueError("Hai list phải có cùng số phần tử.")
+    out = []
+    for i, (bef, aft) in enumerate(zip(before_list, after_list)):
+        pos = diff_positions(bef, aft)
+        acc = 1 - len(pos) / len(bef)
+        out.append({
+            "i": i,
+            "diff_count": len(pos),
+            "positions": pos,
+            "accuracy": acc
+        })
+    return out
 
+def print_interleaved_diff(
+    before_list: List[str],
+    after_list: List[str],
+    after_ecc_list: List[str]
+) -> None:
+    """
+    In xen kẽ theo i:
+      - After vs Before
+      - After+ECC vs Before (kèm accuracy)
+    """
+    if not (len(before_list) == len(after_list) == len(after_ecc_list)):
+        raise ValueError("Tất cả list phải có cùng số phần tử.")
+
+    s_after    = diff_summary_list(before_list, after_list)
+    s_afterecc = diff_summary_list(before_list, after_ecc_list)
+
+    for i in range(len(before_list)):
+        a1 = s_after[i]
+        a2 = s_afterecc[i]
+        print(f"i = {i}")
+        print(f"  After vs Before     | Diff count: {a1['diff_count']:2d} | Positions: {a1['positions']}")
+        print(f"  After+ECC vs Before | Diff count: {a2['diff_count']:2d} | Positions: {a2['positions']} | Accuracy: {a2['accuracy']:.3f}")
+        print("-" * 70)
 
 def init_dist(backend='nccl', **kwargs):
     ''' initialization for distributed training'''
@@ -117,12 +166,12 @@ def main():
 
     # ----- VN Start -----
     ## Explaination: Split images into n^2 sub-images (comment if already done)
-    # if (opt['datasets']['TD']['need_to_split']):
-    #     split_all_images(input_folder = opt['datasets']['TD']['data_path'],
-    #                     output_folder = opt['datasets']['TD']['split_path_ori'],
-    #                     num_images = opt['datasets']['TD']['num_images'],
-    #                     num_child_on_width_size = opt['datasets']['TD']['num_child_on_width_size'],
-    #                     num_child_on_height_size = opt['datasets']['TD']['num_child_on_height_size'])
+    if (opt['datasets']['TD']['need_to_split']):
+        split_all_images(input_folder = opt['datasets']['TD']['data_path'],
+                        output_folder = opt['datasets']['TD']['split_path_ori'],
+                        num_images = opt['datasets']['TD']['num_images'],
+                        num_child_on_width_size = opt['datasets']['TD']['num_child_on_width_size'],
+                        num_child_on_height_size = opt['datasets']['TD']['num_child_on_height_size'])
     # ----- VN End -----
 
     # Create train and val dataloader
@@ -306,8 +355,8 @@ def main():
                 recmessage, message = model.extract(list_messageTensor[i], y_forw = list_rec[i], y = list_rec_quantize[i])
                 list_recmessage.append(recmessage)
                 list_message.append(message)
-                print(f"Step 5, at i = {i}, message: {message}")
-                print(f"Step 5, at i = {i}, recmessage: {recmessage}")
+                # print(f"Step 5, at i = {i}, message: {message}")
+                # print(f"Step 5, at i = {i}, recmessage: {recmessage}")
 
         # Step 5.1: Convert list_message, list_recmessage from tensor to binary string
         for i in range(0, len(list_message)):
@@ -316,7 +365,10 @@ def main():
         
         # Step 5.2: Get copyright (before, after), metadata (before, after) from list_message, list_recmessage
         copyright_before, copyright_after, copyright_after_ECC, metadata_before, metadata_after, metadata_after_ECC = calculate(list_message, list_recmessage, copyright_blocks=dict_copyright_metadata["copyright_blocks"], metadata_blocks=dict_copyright_metadata["metadata_blocks"], copyright_padding=dict_copyright_metadata["copyright_padding"], metadata_padding=dict_copyright_metadata["metadata_padding"], type_correction_code=type_correction_code)
-        bit_error, bit_accuracy = compute_bit_error_and_accuracy(copyright_before, copyright_after, metadata_before, metadata_before)
+        # print_interleaved_diff(copyright_before, copyright_after, copyright_after_ECC)
+        # print_interleaved_diff(metadata_before, metadata_after, metadata_after_ECC)
+
+        bit_error, bit_accuracy = compute_bit_error_and_accuracy(copyright_before, copyright_after, metadata_before, metadata_after)
         bit_error_list_without_correction_code.append(bit_error)
         bit_accuracy_list_without_correction_code.append(bit_accuracy)
 
