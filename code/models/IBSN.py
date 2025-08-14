@@ -41,6 +41,7 @@ import global_variables
 
 class Model_VSN(BaseModel):
     def __init__(self, opt):
+        print("Go to init Model_VSN")
         super(Model_VSN, self).__init__(opt)
 
         if opt['dist']:
@@ -166,9 +167,10 @@ class Model_VSN(BaseModel):
             self.log_dict = OrderedDict()
 
     def feed_data(self, data):
+        print("Go to feed_data")
         self.ref_L = data['LQ'].to(self.device)  
         self.real_H = data['GT'].to(self.device)
-        # self.mes = data['MES']
+        self.mes = data['MES']
 
     def init_hidden_state(self, z):
         b, c, h, w = z.shape
@@ -803,6 +805,7 @@ class Model_VSN(BaseModel):
             self.load_network(load_path_G, self.netG, self.opt['path']['strict_load'])
     
     def load_test(self,load_path_G):
+        print("Go to load_Test")
         self.load_network(load_path_G, self.netG, self.opt['path']['strict_load'])
 
     def save(self, iter_label):

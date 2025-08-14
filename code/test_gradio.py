@@ -38,7 +38,7 @@ def load_image(image, message = None):
     # print(img_GT)
     img_GT = img_GT[:, :, [2, 1, 0]]
     img_GT = torch.from_numpy(np.ascontiguousarray(np.transpose(img_GT, (2, 0, 1)))).float().unsqueeze(0)
-    img_GT = torch.nn.functional.interpolate(img_GT, size=(512, 512), mode='nearest', align_corners=None)
+    # img_GT = torch.nn.functional.interpolate(img_GT, size=(128, 128), mode='nearest', align_corners=None)
     img_GT = img_GT.unsqueeze(0)
 
     _, T, C, W, H = img_GT.shape
@@ -46,6 +46,7 @@ def load_image(image, message = None):
     R = 0
     G = 0
     B = 255
+    print("W, H in load_image: ", W, H)
     image = Image.new('RGB', (W, H), (R, G, B))
     result = np.array(image) / 255.
     expanded_matrix = np.expand_dims(result, axis=0) 
@@ -77,7 +78,7 @@ def image_editing(image_numpy, mask_image, prompt):
     print(mask_image.shape)
     print("maskmin", mask_image.min(), "maskmax", mask_image.max())
     mask_image = Image.fromarray(mask_image.astype(np.uint8)).convert("L")
-    image_init = pil_image.convert("RGB").resize((512, 512))
+    # image_init = pil_image.convert("RGB").resize((512, 512))
     
     h, w = mask_image.size
     

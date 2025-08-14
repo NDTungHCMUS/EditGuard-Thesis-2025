@@ -6,7 +6,7 @@
 import os
 
 # Path to the file
-file_path = '/venv/main/lib/python3.12/site-packages/basicsr/data/degradations.py'
+file_path = '/venv/main/lib/python3.10/site-packages/basicsr/data/degradations.py'
 
 # Read file content
 with open(file_path, 'r') as file:
