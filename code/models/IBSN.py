@@ -717,9 +717,9 @@ class Model_VSN(BaseModel):
 
             lr_img = util.tensor2img(result)
 
-            return lr_img
+            return lr_img, y_forw
 
-    def image_recovery(self, number):
+    def image_recovery(self):
         self.netG.eval()
         with torch.no_grad():
             b, t, c, h, w = self.real_H.shape
@@ -746,21 +746,21 @@ class Model_VSN(BaseModel):
             out_x_h = torch.stack(out_x_h, dim=1)
             out_x_h = out_x_h.reshape(-1, 1, self.gop, 3, h, w)
 
-            rec_loc = out_x_h[:,:, self.gop//2]
+            # rec_loc = out_x_h[:,:, self.gop//2]
             # from PIL import Image
             # tmp = util.tensor2img(rec_loc)
             # save
-            residual = torch.abs(template - rec_loc)
-            binary_residual = (residual > number).float()
-            residual = util.tensor2img(binary_residual)
-            mask = np.sum(residual, axis=2)
+            # residual = torch.abs(template - rec_loc)
+            # binary_residual = (residual > number).float()
+            # residual = util.tensor2img(binary_residual)
+            # mask = np.sum(residual, axis=2)
             # print(mask)
 
             remesg = torch.clamp(recmessage,-0.5,0.5)
             remesg[remesg > 0] = 1
             remesg[remesg <= 0] = 0
 
-            return mask, remesg
+            return remesg
         
     def get_current_log(self):
         return self.log_dict

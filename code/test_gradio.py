@@ -19,7 +19,51 @@ from models import create_model
 import numpy as np
 from PIL import Image
 from diffusers import StableDiffusionInpaintPipeline
+from utils.JPEG import DiffJPEG
+from models.modules.Quantization import Quantization
 
+
+def img2tensor(img, bgr2rgb=True, device="cpu", add_batch=False):
+    """
+    Convert numpy image to torch tensor (C,H,W) in [0,1] float32.
+    - Accepts (H,W,C) or (H,W) numpy arrays in [0,255] or [0,1].
+    - If bgr2rgb=True, assumes input is BGR and converts to RGB safely.
+    - add_batch=True will return (1,C,H,W).
+    """
+    # If someone passes a PIL.Image
+    if hasattr(img, "mode"):
+        img = np.array(img)
+
+    if img.ndim == 2:
+        # (H,W) -> (1,H,W)
+        arr = img[np.newaxis, ...]
+    elif img.ndim == 3:
+        # (H,W,C) -> optionally BGR->RGB without negative strides
+        if bgr2rgb and img.shape[2] == 3:
+            # Use channel indexing to avoid negative strides:
+            # B,G,R -> R,G,B
+            img = img[..., [2, 1, 0]]
+        # (H,W,C) -> (C,H,W)
+        arr = np.transpose(img, (2, 0, 1))
+    else:
+        raise TypeError(f"Expect 2D or 3D numpy array, got ndim={img.ndim}")
+
+    # Ensure contiguous (fixes negative/odd strides and makes from_numpy happy)
+    arr = np.ascontiguousarray(arr)
+
+    # to float32 in [0,1]
+    if arr.dtype != np.float32:
+        arr = arr.astype(np.float32)
+
+    if arr.max() > 1.0:
+        arr = arr / 255.0
+
+    tensor = torch.from_numpy(arr).to(device)
+
+    if add_batch:
+        tensor = tensor.unsqueeze(0)  # (1,C,H,W)
+
+    return tensor
 
 def init_dist(backend='nccl', **kwargs):
     ''' initialization for distributed training'''
@@ -67,8 +111,8 @@ def load_image(image, message = None):
         }
 
 
-def image_editing(image_numpy, mask_image, prompt):
-
+def image_editing(image_numpy, prompt):
+    print("====================== EDIT PHASE ===================")
     pipe = StableDiffusionInpaintPipeline.from_pretrained(
             "stabilityai/stable-diffusion-2-inpainting",
             torch_dtype=torch.float16,
@@ -91,3 +135,39 @@ def image_editing(image_numpy, mask_image, prompt):
     image_fuse = image * (1 - mask_image) + image_inpaint * mask_image
 
     return image_fuse
+
+def image_editing_tung(image_numpy, y_forw, model_index, quality=70):
+    with torch.no_grad():
+        if (model_index == 0):
+            # img = image_numpy.copy()
+            # if img.ndim == 2:
+            #     img = np.stack([img]*3, axis=-1)
+            # # ensure float32 in [0,1]
+            # if img.dtype != np.float32:
+            #     img = img.astype(np.float32)
+            # if img.max() > 1.0:
+            #     img = img / 255.0
+            # print("SHAPE of img:", img.shape)
+            # # create a batched tensor on CUDA with shape (1, C, H, W)
+            # # set bgr2rgb=False assuming image_numpy is RGB coming from Gradio/PIL
+            # tensor = img2tensor(img, bgr2rgb=True, device="cuda", add_batch=True)
+
+            # diffjpeg = DiffJPEG(differentiable=True, quality=int(quality)).to("cuda")
+            # with torch.no_grad():
+            #     out = diffjpeg(tensor)
+
+            # result = torch.clamp(out,0,1)
+
+            # result_np = util.tensor2img(result)
+            # return result_np
+            NL = quality
+            diffJPEG = DiffJPEG(differentiable=True, quality=int(NL)).cuda()
+            y_forw = diffJPEG(y_forw)
+            result = torch.clamp(y_forw,0,1)
+
+            lr_img = util.tensor2img(result)
+
+    quantization = Quantization()
+    y = quantization(y_forw)
+    
+    return lr_img, y_forw, y

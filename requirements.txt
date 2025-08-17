@@ -8,3 +8,6 @@ torch-tensorrt
 torchtext
 torchvision
 torchaudio
+transformers
+reedsolo
+lpips

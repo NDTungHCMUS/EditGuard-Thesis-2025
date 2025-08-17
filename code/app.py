@@ -5,7 +5,9 @@ from PIL import Image, ImageDraw
 import requests
 from copy import deepcopy
 import cv2
-from test_gradio import load_image, image_editing
+from test_gradio import load_image, image_editing, img2tensor, image_editing_tung
+from utils.my_util import bit_string_to_messagenp
+from utils.my_util_2 import bit_accuracy
 
 import options.options as option
 from utils.JPEG import DiffJPEG
@@ -71,14 +73,18 @@ default_example = examples[0]
 def hiding(image_input, bit_input, model):
     if model is None:
         raise ValueError("Model not initialized. Please select a model first.")
-    message = np.array([int(bit_input[i:i+1]) for i in range(0, len(bit_input), 1)])
-    message = message - 0.5
+    # message = np.array([int(bit_input[i:i+1]) for i in range(0, len(bit_input), 1)])
+    # message = message - 0.5
+    messagenp = bit_string_to_messagenp(bit_input, batch_size=1)
+
+    message = torch.Tensor(messagenp)
     val_data = load_image(image_input, message)
     model.feed_data(val_data)
-    container = model.image_hiding()
+    container, y_forw_res = model.image_hiding()
 
     image = Image.fromarray(container)
-    return container, container
+    print ("=========================== End hiding ===========================")
+    return container, container, y_forw_res
 
 
 def rand(num_bits=30):
@@ -86,10 +92,11 @@ def rand(num_bits=30):
     return random_str
 
 
-def ImageEdit(img, img_mask, prompt, model_index):
+def ImageEdit(img, y_forw, model_index):
     # image, mask = img["image"], img_mask["image"]
-    received_image = image_editing(img, img_mask, prompt)
-    return received_image, received_image, received_image
+    received_image, y_forw_res, y_res = image_editing_tung(img, y_forw, model_index)
+    print("============================ End ImageEdit ==========================")
+    return received_image, received_image, received_image, y_forw_res, y_res
 
 
 def imgae_model_select(ckp_index=0):
@@ -152,20 +159,27 @@ def JPEG_image_degradation(image, NL):
     return y_forw, y_forw
 
 
-def revealing(image_edited, input_bit, model_list, model):
+def revealing(image_edited, y_forw, y, input_bit, model_list, model):
     if model_list == 0:
         number = 0.2
     else:
         number = 0.2
 
-    container_data = load_image(image_edited)  # load tampered images
-    model.feed_data(container_data)
-    mask, remesg = model.image_recovery(number)
-    mask = Image.fromarray(mask.astype(np.uint8))
-    remesg = remesg.cpu().numpy()[0]
-    remesg = ''.join([str(int(x)) for x in remesg])
-    bit_acc = calculate_similarity_percentage(input_bit, remesg)
-    return mask, remesg, bit_acc
+    # container_data = load_image(image_edited)  # load tampered images
+    # print ("In reveal step, shape of container_data: ", container_data['LQ'].shape)
+    # model.feed_data(container_data)
+    # mask, remesg = model.image_recovery()
+    # mask = Image.fromarray(mask.astype(np.uint8))
+    # remesg = remesg.cpu().numpy()[0]
+    # remesg = ''.join([str(int(x)) for x in remesg])
+    # bit_acc = calculate_similarity_percentage(input_bit, remesg)
+
+    messagenp = bit_string_to_messagenp(input_bit, batch_size=1)
+
+    message = torch.Tensor(messagenp)
+    recmessage, message = model.extract(message, y_forw, y)
+    print ("============================== End revealing =================================")
+    return recmessage, bit_accuracy(recmessage, message)
 
 
 def calculate_similarity_percentage(str1, str2):
@@ -193,6 +207,8 @@ with gr.Blocks(css=css, title="EditGuard") as demo:
     sam_global_point_label = gr.State([])
     sam_original_image = gr.State(value=None)
     sam_mask = gr.State(value=None)
+    y_forw = gr.State(value=None)
+    y = gr.State(value = None)
 
     with gr.Tabs():
         with gr.TabItem('Multifunctional Forensic Watermark'):
@@ -208,7 +224,7 @@ with gr.Blocks(css=css, title="EditGuard") as demo:
 
             with gr.Column():
                 with gr.Row():
-                    model_list = gr.Dropdown(label="Select model", choices=["Model 1"], type='index')
+                    model_list = gr.Dropdown(label="Select model", choices=["Model 1"], type='index', value = 0)
                     clear_button = gr.Button("Clear all")
                 with gr.Group():
                     gr.Markdown("# 1. Embed watermark")
@@ -269,11 +285,6 @@ with gr.Blocks(css=css, title="EditGuard") as demo:
                             )
                             revealing_button = gr.Button("Extract")
                         with gr.Column():
-                            edit_mask = gr.Image(
-                                label="Predicted edit mask",
-                                interactive=True,
-                                type="numpy"
-                            )
                             bit_output = gr.Textbox(label="Predicted watermark")
                             acc_output = gr.Textbox(label="Watermark accuracy")
 
@@ -286,20 +297,20 @@ with gr.Blocks(css=css, title="EditGuard") as demo:
                     imgae_model_select, inputs=[model_list], outputs=[model]
                 )
                 hiding_button.click(
-                    hiding, inputs=[image_input, bit_input, model], outputs=[image_watermark, image_edit]
+                    hiding, inputs=[image_input, bit_input, model], outputs=[image_watermark, image_edit, y_forw]
                 )
                 rand_bit.click(
                     rand, inputs=[], outputs=[bit_input]
                 )
                 inpainting_button.click(
                     ImageEdit,
-                    inputs=[image_edit, image_mask, text_prompt, inpainting_model_list],
-                    outputs=[image_edited, image_edited_1, save_inpainted_image]
+                    inputs=[image_edit, y_forw, inpainting_model_list],
+                    outputs=[image_edited, image_edited_1, save_inpainted_image, y_forw, y]
                 )
                 revealing_button.click(
                     revealing,
-                    inputs=[image_edited_1, bit_input, model_list, model],
-                    outputs=[edit_mask, bit_output, acc_output]
+                    inputs=[image_edited_1, y_forw, y, bit_input, model_list, model],
+                    outputs=[bit_output, acc_output]
                 )
-    demo.load(imgae_model_select, inputs = [model_list], outputs = [model])
+    demo.load(imgae_model_select, inputs = [gr.State(0)], outputs = [model])
 demo.launch(server_name="0.0.0.0", server_port=2002, share=True, favicon_path='../logo.png')
