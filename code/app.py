@@ -21,6 +21,7 @@ import math
 import argparse
 import random
 import logging
+
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from data.data_sampler import DistIterSampler
@@ -284,8 +285,7 @@ with gr.Blocks(css=css, title="InnoGuard") as demo:
                             image_input = gr.Image(
                                 label="Original image",
                                 interactive=True,
-                                type="numpy",
-                                value=default_example[0]
+                                type="numpy"
                             )
                             with gr.Row():
                                 copyright_input = gr.Textbox(
