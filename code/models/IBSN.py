@@ -695,7 +695,7 @@ class Model_VSN(BaseModel):
         self.netG.train()
 
 
-    def image_hiding(self, ):
+    def image_hiding(self, embedMessage=True):
         self.netG.eval()
         with torch.no_grad():
             b, t, c, h, w = self.real_H.shape
@@ -708,16 +708,27 @@ class Model_VSN(BaseModel):
             self.secret = self.ref_L[:, :, center - intval+id:center + intval + 1+id]
             self.secret = [dwt(self.secret[:,i].reshape(b, -1, h, w)) for i in range(n)]
 
-            message = torch.Tensor(self.mes).to(self.device)
+            
 
-            self.output, container = self.netG(x=dwt(self.host.reshape(b, -1, h, w)), x_h=self.secret, message=message)
-            y_forw = container
+            
+            if embedMessage:
+                message = torch.Tensor(self.mes).to(self.device)
+                self.output, container = self.netG(x=dwt(self.host.reshape(b, -1, h, w)), x_h=self.secret, message=message)
+                y_forw = container
+                result = torch.clamp(y_forw,0,1)
 
-            result = torch.clamp(y_forw,0,1)
+                lr_img = util.tensor2img(result)
 
-            lr_img = util.tensor2img(result)
+                return lr_img, y_forw
+            else:
+                y_forw = self.host[0]
+                result = torch.clamp(y_forw,0,1)
 
-            return lr_img, y_forw
+                lr_img = util.tensor2img(result)
+
+                return lr_img, y_forw
+
+
 
     def image_recovery(self):
         self.netG.eval()

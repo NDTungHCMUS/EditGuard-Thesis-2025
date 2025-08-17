@@ -6,8 +6,10 @@ import requests
 from copy import deepcopy
 import cv2
 from test_gradio import load_image, image_editing, img2tensor, image_editing_tung
-from utils.my_util import bit_string_to_messagenp
-from utils.my_util_2 import bit_accuracy
+from utils.my_util import bit_string_to_messagenp, combine_torch_tensors_4d, split_torch_tensors_4d
+from utils.my_util_2 import bit_accuracy, split_bits_30, encode_ascii, decode_ascii, split_into_tiles_128
+from utils.hamming_code_7_4_new import encode_hamming74, decode_hamming74, recover_30_from_codeword60, parity_30_from_30
+
 
 import options.options as option
 from utils.JPEG import DiffJPEG
@@ -37,6 +39,15 @@ from scipy.ndimage import zoom
 
 import matplotlib.pyplot as plt
 
+import hashlib
+
+def sha256_bitstring(text: str) -> str:
+    digest = hashlib.sha256(text.encode("utf-8")).digest()  # 32 bytes
+    return ''.join(f'{b:08b}' for b in digest)   
+
+def text_to_bitstring(text: str, encoding: str = "utf-8") -> str:
+    """Encode text -> '0'/'1' bitstring (MSB-first, 8 bit/byte)."""
+    return ''.join(f'{b:08b}' for b in text.encode(encoding))
 
 def img_to_base64(filepath):
     with open(filepath, "rb") as img_file:
@@ -69,12 +80,59 @@ examples = [
 
 default_example = examples[0]
 
+def hiding2(image_input, text_input, metadata_input, type_correction_code, model):
+    bit_input = sha256_bitstring(text_input)
+    copyright_list, copyright_padding = split_bits_30(bit_input)
+    metadata_input = encode_ascii(metadata_input)
+    metadata_list, metadata_padding = split_bits_30(metadata_input)
+
+    tiles_128, coords, orig_hw, padded_hw = split_into_tiles_128(image_input, pad_mode="edge")
+    num_child_images = len(tiles_128)
+    list_container = []
+
+    H, W, C = image_input.shape
+    num_child_on_width_size, num_child_on_height_size = H//128, W//128
+
+    for i in range(0, num_child_images):
+        if (i < 9):
+            message = copyright_list[i]
+        elif (i < 9 + len(metadata_list)):
+            message = metadata_list[i - 9]
+        else:
+            if (type_correction_code == 0):
+                    message = -1
+            elif (type_correction_code != 0):
+                if (i < 2 * 9 + len(metadata_list)):
+                    message = parity_30_from_30(copyright_list[i - 9 - len(metadata_list)])
+                elif (i < 2 * 9 + 2 * len(metadata_list)):
+                    message = parity_30_from_30(metadata_list[i - 2 * 9 - len(metadata_list)])
+                else :
+                    message = -1
+        
+        
+
+        if message != -1:
+            messagenp = bit_string_to_messagenp(message, batch_size=1)
+
+            message = torch.Tensor(messagenp)
+            val_data = load_image(tiles_128[i], message)
+            model.feed_data(val_data)
+            container, y_forw_res = model.image_hiding()
+            list_container.append(y_forw_res)
+        else:
+            val_data = load_image(tiles_128[i], message)
+            model.feed_data(val_data)
+            container, y_forw_res = model.image_hiding(embedMessage = False)
+            list_container.append(y_forw_res)
+    parent_container = combine_torch_tensors_4d(list_container, num_child_on_width_size, num_child_on_height_size)
+    result = torch.clamp(parent_container,0,1)
+
+    lr_img = util.tensor2img(result)
+    return lr_img, lr_img, parent_container
 
 def hiding(image_input, bit_input, model):
     if model is None:
         raise ValueError("Model not initialized. Please select a model first.")
-    # message = np.array([int(bit_input[i:i+1]) for i in range(0, len(bit_input), 1)])
-    # message = message - 0.5
     messagenp = bit_string_to_messagenp(bit_input, batch_size=1)
 
     message = torch.Tensor(messagenp)
@@ -86,6 +144,13 @@ def hiding(image_input, bit_input, model):
     print ("=========================== End hiding ===========================")
     return container, container, y_forw_res
 
+import random, secrets, string
+
+def rand_text():
+    length = random.randint(10, 50)
+    # printable ASCII without control chars; allow space
+    alphabet = ''.join(chr(i) for i in range(32, 127))  # 32..126
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
 
 def rand(num_bits=30):
     random_str = ''.join([str(random.randint(0, 1)) for _ in range(num_bits)])
@@ -210,6 +275,10 @@ with gr.Blocks(css=css, title="EditGuard") as demo:
     y_forw = gr.State(value=None)
     y = gr.State(value = None)
 
+    list_copyright = gr.State(value = None)
+    list_metadata = gr.State(value = None)
+    type_correction_code = gr.State(value = 1)
+
     with gr.Tabs():
         with gr.TabItem('Multifunctional Forensic Watermark'):
             DESCRIPTION = """
@@ -237,11 +306,16 @@ with gr.Blocks(css=css, title="EditGuard") as demo:
                                 value=default_example[0]
                             )
                             with gr.Row():
-                                bit_input = gr.Textbox(
-                                    label="Enter copyright watermark (64-bit bitstring)",
+                                copyright_input = gr.Textbox(
+                                    label="Enter copyright watermark (text format)",
                                     placeholder="Type here..."
                                 )
-                                rand_bit = gr.Button("🎲 Randomize watermark")
+                                metadata_input = gr.Textbox(
+                                    label="Enter metadata (text format)",
+                                    placeholder="Type here..."
+                                )
+                                rand_copyright = gr.Button("🎲 Randomize copyright")
+                                rand_metadata = gr.Button("🎲 Randomize metadata")
                             hiding_button = gr.Button("Embed watermark")
                         with gr.Column():
                             image_watermark = gr.Image(
@@ -297,10 +371,13 @@ with gr.Blocks(css=css, title="EditGuard") as demo:
                     imgae_model_select, inputs=[model_list], outputs=[model]
                 )
                 hiding_button.click(
-                    hiding, inputs=[image_input, bit_input, model], outputs=[image_watermark, image_edit, y_forw]
+                    hiding2, inputs=[image_input, copyright_input, metadata_input, type_correction_code, model], outputs=[image_watermark, image_edit, y_forw]
                 )
-                rand_bit.click(
-                    rand, inputs=[], outputs=[bit_input]
+                rand_copyright.click(
+                    rand_text, inputs=[], outputs=[copyright_input]
+                )
+                rand_metadata.click(
+                    rand_text, inputs=[], outputs=[metadata_input]
                 )
                 inpainting_button.click(
                     ImageEdit,
@@ -309,7 +386,7 @@ with gr.Blocks(css=css, title="EditGuard") as demo:
                 )
                 revealing_button.click(
                     revealing,
-                    inputs=[image_edited_1, y_forw, y, bit_input, model_list, model],
+                    inputs=[image_edited_1, y_forw, y, copyright_input, model_list, model],
                     outputs=[bit_output, acc_output]
                 )
     demo.load(imgae_model_select, inputs = [gr.State(0)], outputs = [model])
