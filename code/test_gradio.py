@@ -23,6 +23,45 @@ from utils.JPEG import DiffJPEG
 from models.modules.Quantization import Quantization
 
 
+# test_gradio.py
+from pathlib import Path
+from PIL import Image, ImageDraw
+import os
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parent.parent
+
+def _default_mask_dir() -> Path:
+    env = os.environ.get("EDITGUARD_MASK_DIR")
+    return Path(env) if env else (_repo_root() / "dataset" / "valAGE-Set-Mask")
+
+def _load_mask(mask_name: str = "0001.png",
+               fallback_size=None,  # (h, w)
+               bottom_ratio: float = 0.2) -> Image.Image:
+    """
+    Returns L-mode mask. If file not found, creates a mask where the
+    bottom `bottom_ratio` is white (edit region) and the top is black.
+    `fallback_size` must be (h, w)  <-- height before width
+    """
+    p = (_default_mask_dir() / mask_name).resolve()
+    if p.exists():
+        return Image.open(p).convert("L")
+
+    if fallback_size is None:
+        raise FileNotFoundError(f"Mask not found: {p}")
+
+    h, w = fallback_size  # height, width
+    print(f"[warn] Mask not found at {p}. Using bottom-{bottom_ratio:.0%} mask {h}x{w} (h×w).")
+
+    # PIL expects (width, height)
+    mask = Image.new("L", (w, h), 0)
+    draw = ImageDraw.Draw(mask)
+    band_h = max(1, int(round(h * bottom_ratio)))
+    draw.rectangle([0, h - band_h, w, h], fill=255)
+    return mask
+
+
+
 def img2tensor(img, bgr2rgb=True, device="cpu", add_batch=False):
     """
     Convert numpy image to torch tensor (C,H,W) in [0,1] float32.
@@ -136,38 +175,56 @@ def image_editing(image_numpy, prompt):
 
     return image_fuse
 
-def image_editing_tung(image_numpy, y_forw, model_index, quality=70):
+def image_editing_tung(image_numpy, y_forw, model_index):
     with torch.no_grad():
         if (model_index == 0):
-            # img = image_numpy.copy()
-            # if img.ndim == 2:
-            #     img = np.stack([img]*3, axis=-1)
-            # # ensure float32 in [0,1]
-            # if img.dtype != np.float32:
-            #     img = img.astype(np.float32)
-            # if img.max() > 1.0:
-            #     img = img / 255.0
-            # print("SHAPE of img:", img.shape)
-            # # create a batched tensor on CUDA with shape (1, C, H, W)
-            # # set bgr2rgb=False assuming image_numpy is RGB coming from Gradio/PIL
-            # tensor = img2tensor(img, bgr2rgb=True, device="cuda", add_batch=True)
-
-            # diffjpeg = DiffJPEG(differentiable=True, quality=int(quality)).to("cuda")
-            # with torch.no_grad():
-            #     out = diffjpeg(tensor)
-
-            # result = torch.clamp(out,0,1)
-
-            # result_np = util.tensor2img(result)
-            # return result_np
-            NL = quality
+            NL = 70
             diffJPEG = DiffJPEG(differentiable=True, quality=int(NL)).cuda()
             y_forw = diffJPEG(y_forw)
-            result = torch.clamp(y_forw,0,1)
+            
+        elif (model_index == 1):
+            NL = 10 / 255.0
+            noise = np.random.normal(0, NL, y_forw.shape)
+            torchnoise = torch.from_numpy(noise).cuda().float()
+            y_forw = y_forw + torchnoise
+        
+        elif (model_index == 2):
+            pipe = StableDiffusionInpaintPipeline.from_pretrained(
+                "stabilityai/stable-diffusion-2-inpainting",
+                torch_dtype=torch.float16,
+            ).to("cuda")
 
-            lr_img = util.tensor2img(result)
+            import random
+            from PIL import Image
+            prompt = ""
+
+            b, _, H, W = y_forw.shape
+            
+            image_batch = y_forw.permute(0, 2, 3, 1).detach().cpu().numpy()
+            forw_list = []
+
+            for j in range(b):
+                # masksrc = "../dataset/valAGE-Set-Mask/"
+                mask_image = _load_mask("0001.png", fallback_size=(H, W)).resize((H, W)).convert("L")
+                mask_image = mask_image.resize((H, W))
+                h, w = mask_image.size
+                
+                image = image_batch[j, :, :, :]
+                image_init = Image.fromarray((image * 255).astype(np.uint8), mode = "RGB")
+                image_inpaint = pipe(prompt=prompt, image=image_init, mask_image=mask_image, height=w, width=h).images[0]
+                image_inpaint = np.array(image_inpaint) / 255.
+                mask_image = np.array(mask_image)
+                mask_image = np.stack([mask_image] * 3, axis=-1) / 255.
+                mask_image = mask_image.astype(np.uint8)
+                image_fuse = image * (1 - mask_image) + image_inpaint * mask_image
+                forw_list.append(torch.from_numpy(image_fuse).permute(2, 0, 1))
+            
+            y_forw = torch.stack(forw_list, dim=0).float().cuda()
+
+        
+        result = torch.clamp(y_forw,0,1)
+        lr_img = util.tensor2img(result)
 
     quantization = Quantization()
     y = quantization(y_forw)
-    
     return lr_img, y_forw, y

@@ -106,7 +106,7 @@ def split_bits_30(bitstr: str):
     if last_real_len < 30:
         chunks[-1] = chunks[-1].ljust(30, '0')  # padding '0' đủ 30
 
-    return chunks, last_real_len
+    return chunks, 30 - last_real_len
 
 
 def encode_ascii(text: str, errors: str = "strict") -> str:

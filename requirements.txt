@@ -11,3 +11,4 @@ torchaudio
 transformers
 reedsolo
 lpips
+pillow
