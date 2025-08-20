@@ -35,6 +35,23 @@ from scipy.ndimage import zoom
 import matplotlib.pyplot as plt
 import hashlib
 
+# ----- VN START -----
+import sys
+import logging
+
+# Open the file with UTF-8 encoding to support emojis and Unicode
+logfile = open("app_console.log", "w", encoding="utf-8")
+
+sys.stdout = logfile
+sys.stderr = logfile
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    stream=logfile
+)
+# ----- VN END -----
+
 def sha256_bitstring(text: str) -> str:
     digest = hashlib.sha256(text.encode("utf-8")).digest()  # 32 bytes
     return ''.join(f'{b:08b}' for b in digest)   
