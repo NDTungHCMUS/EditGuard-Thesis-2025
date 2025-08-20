@@ -40,7 +40,7 @@ metadata_length: 0
 # ----- VN End -----
 bitrecord: False
 
-mode: image
+mode: bit
 
 # ----- VN START -----
 #### results

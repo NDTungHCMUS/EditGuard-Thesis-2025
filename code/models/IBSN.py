@@ -824,10 +824,14 @@ class Model_VSN(BaseModel):
 
     # ----- VN Start -----
     def embed(self, message = "0" * 64, embedMessage = True):
+        # Model init
         self.netG.eval()
+        
+        # Message init
         messagenp = bit_string_to_messagenp(message, batch_size=1)
-
         message = torch.Tensor(messagenp).to(self.device)
+        
+        # Embed init
         with torch.no_grad():
             b, t, c, h, w = self.real_H.shape
             center = t // 2
