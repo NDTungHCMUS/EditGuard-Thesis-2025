@@ -21,7 +21,7 @@ sdxl: False
 repaint: False
 
 addklvae8: False
-addclip: True
+addclip: False
 addresnet: False
 addklvae16: False
 

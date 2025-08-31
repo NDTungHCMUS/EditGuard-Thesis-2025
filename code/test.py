@@ -257,6 +257,7 @@ def main():
     bit_accuracy_list_with_correction_code = []
 
     psnr_avg = 0.0
+    ssim_avg = 0.0
     # Create Random Walk
     # random_walk_sequence = random_walk_unique(number_of_64bits_blocks_input, num_child_images, opt['seed_number'])
 
@@ -381,8 +382,11 @@ def main():
         
         # Calculate PSNR
         pnsr_cur = cal_pnsr(parent_container_img, parent_ori_img)
+        ssim_cur = util.calculate_ssim(parent_container_img, parent_ori_img)
         psnr_avg += pnsr_cur
+        ssim_avg += ssim_cur
         print(f"PSNR for image {parent_image_id + 1}: {pnsr_cur}")
+        print(f"SSIM for image {parent_image_id + 1}: {ssim_cur}")
         # Step 6: Try to fix base on Reed-Solomons        
         # copyright_before, copyright_after, phash_before, phash_after, metadata_before, metadata_after, cnt_cannot_solve = get_copyright_phash_metadata_from_list_with_correction(list_message, list_recmessage, random_walk_sequence, number_of_64bits_blocks_copyright, number_of_64bits_blocks_phash, number_of_64bits_blocks_metadata, type_correction_code = type_correction_code, H = H_GLOBAL)
         # bit_error = write_extracted_messages(parent_image_id, copyright_before, copyright_after, phash_before, phash_after, metadata_before, metadata_after, opt['datasets']['TD']['copyright_output_with_correction'])
@@ -390,6 +394,7 @@ def main():
         # cnt_cannot_solve_all += cnt_cannot_solve
 
     psnr_avg /= num_images
+    ssim_avg /= num_images
     avg_bit_error_without_correction = sum(bit_error_list_without_correction_code) / len(bit_error_list_without_correction_code)
     avg_bit_accuracy_without_correction = sum(bit_accuracy_list_without_correction_code) / len(bit_accuracy_list_without_correction_code)
     # avg_bit_error_with_correction = sum(bit_error_list_with_correction_code) / len(bit_error_list_with_correction_code)
@@ -397,13 +402,14 @@ def main():
     # PRINT RESULT
     # print(f"Cannot Solve {cnt_cannot_solve_all} pairs among {num_images * num_child_images // 2} pairs")
     print(f"FINAL RESULT:\n BIT_ERR WITHOUT CORRECTION IS: {avg_bit_error_without_correction}")
-    print(f" BIT_ACC WITHOUT CORRECTION IS: {avg_bit_accuracy_without_correction}")
+    print(f" BIT_ACC WITHOUT CORRECTION IS: {avg_bit_accuracy_without_correction * 100:.2f}%")
     if (type_correction_code != 0):
         avg_bit_error_with_correction = sum(bit_error_list_with_correction_code) / len(bit_error_list_with_correction_code)
         avg_bit_accuracy_with_correction = sum(bit_accuracy_list_with_correction_code) / len(bit_accuracy_list_with_correction_code)
         print(f" BIT_ERR WITH CORRECTION IS: {avg_bit_error_with_correction}")
-        print(f" BIT_ACC WITH CORRECTION IS: {avg_bit_accuracy_with_correction}")
+        print(f" BIT_ACC WITH CORRECTION IS: {avg_bit_accuracy_with_correction * 100:.2f}%")
     print(f" PSNR AVG IS: {psnr_avg}")
+    print(f" SSIM AVG IS: {ssim_avg}")
 
     # ----- ORIGINAL -----
     # img_dir = os.path.join('results',opt['name'])
